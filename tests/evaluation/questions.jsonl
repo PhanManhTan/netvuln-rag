@@ -1,0 +1,4 @@
+{"id":"fortios-cve-001","question":"FortiOS 7.2.5 có bị CVE-2024-21762 ảnh hưởng không?","expected_cves":["CVE-2024-21762"],"expected_status":"affected","notes":"Positive version-range example; verify the gold label against the current NVD record before a formal experiment."}
+{"id":"fortios-cve-002","question":"FortiOS phiên bản 7.2.7 có bị CVE-2024-21762 ảnh hưởng không?","expected_cves":["CVE-2024-21762"],"expected_status":"not_affected","notes":"Negative boundary example; verify the gold label against the current NVD record before a formal experiment."}
+{"id":"fortios-cve-003","question":"FortiOS 7.2.5 có bị CVE-2099-99999 ảnh hưởng không?","expected_cves":[],"expected_status":"insufficient_evidence","notes":"Synthetic abstention case using a future CVE identifier."}
+
