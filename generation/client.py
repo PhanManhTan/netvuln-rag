@@ -6,7 +6,7 @@ from typing import Any
 
 import requests
 
-from rag_system.config import Settings, get_settings
+from config.settings import Settings, get_settings
 
 
 class LLMClient:

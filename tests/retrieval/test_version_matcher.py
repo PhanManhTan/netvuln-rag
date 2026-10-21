@@ -1,5 +1,5 @@
-from rag_system.models import MatchStatus
-from rag_system.versioning import VersionMatcher
+from retrieval.models import MatchStatus
+from retrieval.version_matcher import VersionMatcher
 
 
 RULES = [

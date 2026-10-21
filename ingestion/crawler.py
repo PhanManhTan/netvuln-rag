@@ -5,8 +5,8 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from rag_system.config import get_settings
-from rag_system.ingestion.adapters import get_source_adapter
+from config.settings import get_settings
+from ingestion.registry import get_source_adapter
 
 
 def crawl_data(output_dir: Path | None = None) -> Path:

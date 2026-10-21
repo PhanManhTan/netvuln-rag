@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from rag_system.config import Settings
-from rag_system.ingestion.base import SourceAdapter
-from rag_system.ingestion.adapters.nvd import NVDAdapter
+from config.settings import Settings
+from ingestion.contracts import SourceAdapter
+from ingestion.nvd import NVDAdapter
 
 
 AdapterFactory = Callable[[Settings], SourceAdapter]

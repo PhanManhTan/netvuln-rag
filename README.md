@@ -22,26 +22,35 @@ Các tầng chỉ phụ thuộc vào contract của tầng bên dưới. NVD là
 
 ```text
 netvuln-rag/
-├── src/
-│   └── main.py                       # FastAPI: /health, /search, /chat
-├── llm/
+├── config/
+│   └── settings.py                   # Cấu hình chung từ .env
+├── ingestion/
+│   ├── contracts.py                  # Contract cho source adapter
+│   ├── registry.py                   # Đăng ký source adapter
+│   ├── crawler.py                    # Lệnh crawl tổng quát
+│   ├── processor.py                  # Lệnh process tổng quát
+│   └── nvd.py                        # Chi tiết riêng của NVD
+├── indexing/
+│   ├── chunker.py                    # Record -> retrieval chunks
+│   └── indexer.py                    # Embedding -> vector store
+├── retrieval/
+│   ├── models.py                     # Data contracts của retrieval
+│   ├── parser.py                     # Câu hỏi -> structured query
+│   ├── version_matcher.py            # So sánh version range
+│   └── retriever.py                  # Vector/exact search + context
+├── generation/
 │   ├── client.py                     # Gọi model theo provider
 │   ├── chatbot.py                    # Ghép retrieval + LLM, terminal chat
 │   └── prompts.json                  # Prompt tách khỏi source code
-├── rag_system/
-│   ├── config.py                     # Cấu hình chung từ .env
-│   ├── models.py                     # Data contracts dùng trong RAG
-│   ├── pipeline.py                   # Crawl -> process -> index
-│   ├── indexer.py                    # Chunk, embedding, vector store
-│   ├── retrieval.py                  # Parse query và retrieve evidence
-│   ├── versioning.py                 # So sánh version range
-│   └── ingestion/
-│       ├── base.py                   # Contract cho source adapter
-│       ├── crawler.py                # Lệnh crawl tổng quát
-│       ├── processor.py              # Lệnh process tổng quát
-│       └── adapters/
-│           └── nvd.py                # Chi tiết riêng của NVD
+├── api/
+│   └── main.py                       # FastAPI: /health, /search, /chat
+├── pipelines/
+│   └── prepare_data.py               # Crawl -> process -> index
 ├── tests/
+│   ├── ingestion/
+│   ├── indexing/
+│   ├── retrieval/
+│   ├── generation/
 │   └── evaluation/                   # So sánh LLM-only và RAG
 └── data/
     ├── raw/<source>/
@@ -84,27 +93,27 @@ TARGET_CPE=cpe:2.3:o:fortinet:fortios:*:*:*:*:*:*:*:*
 Chạy cả pipeline:
 
 ```powershell
-python -m rag_system.pipeline
+python -m pipelines.prepare_data
 ```
 
 Dùng raw data đã có:
 
 ```powershell
-python -m rag_system.pipeline --skip-crawl
+python -m pipelines.prepare_data --skip-crawl
 ```
 
 Hoặc chạy riêng từng bước:
 
 ```powershell
-python -m rag_system.ingestion.crawler
-python -m rag_system.ingestion.processor
-python -m rag_system.indexer
+python -m ingestion.crawler
+python -m ingestion.processor
+python -m indexing.indexer
 ```
 
 Tạo lại collection khi đổi schema hoặc embedding model:
 
 ```powershell
-python -m rag_system.indexer --recreate
+python -m indexing.indexer --recreate
 ```
 
 ## 6. Chọn LLM
@@ -135,19 +144,19 @@ OPENAI_MODEL=gpt-4.1-mini
 Chat trong terminal:
 
 ```powershell
-python -m llm.chatbot
+python -m generation.chatbot
 ```
 
 Gửi một câu rồi thoát:
 
 ```powershell
-python -m llm.chatbot --text "FortiOS 7.2.5 có bị CVE-2024-21762 ảnh hưởng không?"
+python -m generation.chatbot --text "FortiOS 7.2.5 có bị CVE-2024-21762 ảnh hưởng không?"
 ```
 
 Chạy API:
 
 ```powershell
-uvicorn src.main:app --reload --host 127.0.0.1 --port 8000
+uvicorn api.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
 Swagger UI: `http://127.0.0.1:8000/docs`.
@@ -178,20 +187,20 @@ Content-Type: application/json
 
 ### Thêm nguồn dữ liệu
 
-1. Tạo adapter mới trong `rag_system/ingestion/adapters/` và implement `SourceAdapter`.
+1. Tạo adapter mới trực tiếp trong `ingestion/` và implement `SourceAdapter`.
 2. Chuyển dữ liệu về schema chung có các field `vulnerability_id`, `vendor`, `product`, `description`, `affected_versions`, `source_url` và `source`.
-3. Đăng ký adapter trong `rag_system/ingestion/adapters/__init__.py`.
+3. Đăng ký adapter trong `ingestion/registry.py`.
 4. Đặt `DATA_SOURCE` trong `.env`.
 
 Indexer, retriever, chatbot và API không cần sửa.
 
 ### Thêm LLM provider
 
-Thêm hàm generate và đăng ký provider trong `llm/client.py`. API nhận provider dạng chuỗi nên không phải thay request schema.
+Thêm hàm generate và đăng ký provider trong `generation/client.py`. API nhận provider dạng chuỗi nên không phải thay request schema.
 
 ### Đổi vector database hoặc embedding
 
-Interface cần thay nằm trong `rag_system/indexer.py` và `rag_system/retrieval.py`; ingestion, LLM và API không phụ thuộc schema riêng của NVD.
+Interface cần thay nằm trong `indexing/indexer.py` và `retrieval/retriever.py`; ingestion, LLM và API không phụ thuộc schema riêng của NVD.
 
 ## 9. Evaluation
 
@@ -208,7 +217,7 @@ Kết quả được lưu tại `artifacts/evaluation/<timestamp>/`. Xem [hướ
 Chỉ kiểm tra syntax, không crawl, tải model, gọi vector store hoặc LLM:
 
 ```powershell
-python -m compileall -q src llm rag_system tests
+python -m compileall -q api config generation indexing ingestion pipelines retrieval tests
 ```
 
 Unit test logic:

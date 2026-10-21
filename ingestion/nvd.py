@@ -10,7 +10,7 @@ from typing import Any, Iterable
 
 import requests
 
-from rag_system.config import Settings
+from config.settings import Settings
 
 
 class NVDAdapter:

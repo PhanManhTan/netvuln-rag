@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import argparse
 
-from rag_system.config import get_settings
-from rag_system.indexer import build_index
-from rag_system.ingestion.adapters import get_source_adapter
+from config.settings import get_settings
+from indexing.indexer import build_index
+from ingestion.registry import get_source_adapter
 
 
 def main() -> int:

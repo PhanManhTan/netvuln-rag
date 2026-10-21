@@ -1,5 +1,5 @@
-from rag_system.models import QueryIntent
-from rag_system.retrieval import parse_query
+from retrieval.models import QueryIntent
+from retrieval.parser import parse_query
 
 
 def test_parse_cve_and_version() -> None:

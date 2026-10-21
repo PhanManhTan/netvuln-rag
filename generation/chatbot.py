@@ -8,9 +8,10 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
-from llm.client import LLMClient
-from rag_system.config import Settings, get_settings
-from rag_system.retrieval import Retriever, VULNERABILITY_ID_PATTERN
+from config.settings import Settings, get_settings
+from generation.client import LLMClient
+from retrieval.parser import VULNERABILITY_ID_PATTERN
+from retrieval.retriever import Retriever
 
 
 PROMPTS_PATH = Path(__file__).with_name("prompts.json")

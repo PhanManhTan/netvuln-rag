@@ -9,9 +9,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from llm.chatbot import RAGChatbot, load_prompts
-from llm.client import LLMClient
-from rag_system.config import PROJECT_ROOT, get_settings
+from config.settings import PROJECT_ROOT, get_settings
+from generation.chatbot import RAGChatbot, load_prompts
+from generation.client import LLMClient
 from tests.evaluation.metrics import compare_summaries, infer_status, summarize
 
 

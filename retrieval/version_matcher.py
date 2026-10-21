@@ -1,4 +1,4 @@
-"""Version-range evaluation independent of a specific vendor or product."""
+"""Default numeric version-range matcher."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from typing import Any
 
 from packaging.version import InvalidVersion, Version
 
-from rag_system.models import MatchStatus, VersionDecision
+from retrieval.models import MatchStatus, VersionDecision
 
 
 class VersionMatcher:
