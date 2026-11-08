@@ -1,7 +1,15 @@
 # Data directories
 
-- `raw/<source>/`: response nguyên bản, chia theo timestamp và page.
-- `processed/`: dữ liệu JSONL theo schema chung để tạo chunk và index.
+Paths are relative to `DATA_DIR`, which defaults to this directory.
 
-Hai thư mục dữ liệu được bỏ qua bởi Git, ngoại trừ file `.gitkeep`. Không chỉnh sửa raw data bằng tay; nếu cần hỗ trợ nguồn mới, thêm adapter trực tiếp trong `ingestion/`, đăng ký tại `ingestion/registry.py`, rồi tạo lại processed data.
+| Path | Contents |
+| --- | --- |
+| `raw/<product>/<source>/<run-id>/` | Original crawl pages and a run manifest |
+| `processed/snapshots/<snapshot-id>/structured/` | Normalized CVE records by product |
+| `processed/snapshots/<snapshot-id>/chunks/` | Evidence chunks for retrieval and indexing |
+| `processed/manifest.json` | Published snapshot with input run IDs, relative artifact paths, and hashes |
+| `reference/nvd/` | Optional global NVD CVE catalog |
+| `curated/` | Reviewed vendor advisories for profiles that use them |
+
+Copy the manifest with its referenced files when moving a snapshot between machines. Older snapshots using `processed/structured/` and `processed/chunks/` remain readable. See the [data pipeline guide](../data_pipeline/README.md) for rebuild commands. Generated evaluation datasets are stored under `$ARTIFACTS_DIR/evaluation/`.
 

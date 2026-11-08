@@ -1,5 +1,5 @@
-from retrieval.models import MatchStatus
-from retrieval.version_matcher import VersionMatcher
+from rag.retrieval.models import MatchStatus
+from rag.retrieval.version_matcher import VersionMatcher
 
 
 RULES = [
@@ -17,9 +17,9 @@ def test_version_inside_range_is_affected() -> None:
     assert result.status == MatchStatus.AFFECTED
 
 
-def test_exclusive_upper_boundary_is_not_affected() -> None:
+def test_exclusive_upper_boundary_without_safe_rule_is_unknown() -> None:
     result = VersionMatcher().evaluate("CVE-2024-21762", "7.2.7", RULES)
-    assert result.status == MatchStatus.NOT_AFFECTED
+    assert result.status == MatchStatus.UNKNOWN
 
 
 def test_missing_rules_is_unknown() -> None:

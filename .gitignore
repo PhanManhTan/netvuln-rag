@@ -13,6 +13,8 @@ data/raw/*
 !data/raw/.gitkeep
 data/processed/*
 !data/processed/.gitkeep
+data/reference/nvd/all_cve_ids.txt
+data/reference/nvd/manifest.json
 qdrant_storage/
 artifacts/evaluation/
 
@@ -20,4 +22,5 @@ artifacts/evaluation/
 .vscode/
 .DS_Store
 Thumbs.db
+main.tex
 

@@ -1,235 +1,97 @@
 # NetVuln RAG
 
-Hệ thống RAG cơ bản để tra cứu lỗ hổng cho thiết bị và phần mềm mạng. Core được viết theo schema chung; cấu hình mặc định hiện dùng **NVD + Fortinet FortiOS**, nhưng có thể đổi sản phẩm hoặc thêm nguồn dữ liệu mà không phải sửa retrieval, LLM hay FastAPI.
+NetVuln RAG answers CVE questions with citations for OpenSSH, OpenVPN Community, and Fortinet FortiOS. The default product catalog queries NVD for the 16 software versions in the proposal.
 
+## Repository layout
 
-## 1. Kiến trúc
+| Directory | Purpose |
+| --- | --- |
+| [`config/`](config/README.md) | Product catalog and runtime settings |
+| [`data_pipeline/`](data_pipeline/README.md) | NVD crawl, normalized records, chunks, and Qdrant indexing |
+| [`rag/`](rag/README.md) | Question parsing, version checks, retrieval, and cited answers |
+| [`api/`](api/README.md) | FastAPI requests and responses |
+| [`evaluation/`](evaluation/README.md) | Draft questions, benchmark runs, scoring examples, and the pilot chart |
+| `tests/` | Automated tests |
+| [`data/`](data/README.md) | Default storage root for source data and processed corpora |
+| `artifacts/` | Default storage root for evaluation datasets and results |
 
-```text
-External source
-  -> source adapter
-  -> raw data
-  -> common vulnerability schema
-  -> embedding + vector store
-  -> retrieval + version matching
-  -> LLM + citations
-  -> CLI hoặc FastAPI
-```
+## 1. Configure the project
 
-Các tầng chỉ phụ thuộc vào contract của tầng bên dưới. NVD là một adapter, không phải logic của toàn project.
+Create a Python 3.11 or newer virtual environment from the repository root. Install dependencies and copy `.env.example` to `.env` on first setup.
 
-## 2. Cấu trúc project
-
-```text
-netvuln-rag/
-├── config/
-│   └── settings.py                   # Cấu hình chung từ .env
-├── ingestion/
-│   ├── contracts.py                  # Contract cho source adapter
-│   ├── registry.py                   # Đăng ký source adapter
-│   ├── crawler.py                    # Lệnh crawl tổng quát
-│   ├── processor.py                  # Lệnh process tổng quát
-│   └── nvd.py                        # Chi tiết riêng của NVD
-├── indexing/
-│   ├── chunker.py                    # Record -> retrieval chunks
-│   └── indexer.py                    # Embedding -> vector store
-├── retrieval/
-│   ├── models.py                     # Data contracts của retrieval
-│   ├── parser.py                     # Câu hỏi -> structured query
-│   ├── version_matcher.py            # So sánh version range
-│   └── retriever.py                  # Vector/exact search + context
-├── generation/
-│   ├── client.py                     # Gọi model theo provider
-│   ├── chatbot.py                    # Ghép retrieval + LLM, terminal chat
-│   └── prompts.json                  # Prompt tách khỏi source code
-├── api/
-│   └── main.py                       # FastAPI: /health, /search, /chat
-├── pipelines/
-│   └── prepare_data.py               # Crawl -> process -> index
-├── tests/
-│   ├── ingestion/
-│   ├── indexing/
-│   ├── retrieval/
-│   ├── generation/
-│   └── evaluation/                   # So sánh LLM-only và RAG
-└── data/
-    ├── raw/<source>/
-    └── processed/
-```
-
-Tên `nvd.py` được giữ cụ thể có chủ đích: code phụ thuộc NVD phải nằm đúng một chỗ. Những phần còn lại dùng tên và schema tổng quát.
-
-## 3. Cài đặt
-
-Yêu cầu Python 3.11+ và Docker Desktop.
+Windows PowerShell
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
 Copy-Item .env.example .env
-docker compose up -d qdrant
 ```
 
-Qdrant dashboard: `http://localhost:6333/dashboard`.
+Linux or macOS
 
-## 4. Chọn nguồn và sản phẩm
-
-Profile mặc định trong `.env.example`:
-
-```env
-DATA_SOURCE=nvd
-TARGET_VENDOR=fortinet
-TARGET_PRODUCT=fortios
-TARGET_PRODUCT_ALIASES=fortios,fortinet os
-TARGET_CPE=cpe:2.3:o:fortinet:fortios:*:*:*:*:*:*:*:*
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+cp .env.example .env
 ```
 
-Để đổi sang sản phẩm khác có dữ liệu NVD, thay profile trên và dùng collection mới hoặc chạy lại index với `--recreate`.
+Edit [config/products.json](config/products.json) to select products and versions. Set `DATA_DIR` and `ARTIFACTS_DIR` in `.env` to move the storage roots. Relative values are resolved from the repository root. Absolute values can point to mounted server volumes. See the [storage guide](data_pipeline/README.md#storage).
 
-## 5. Chuẩn bị dữ liệu
+Use `python -m pip install -r requirements-cloud.txt` for a cloud-only checkout. To run the CLI from another directory, install the checkout with `python -m pip install -e .`. The full `requirements.txt` also installs local embedding and test dependencies. [Path and device settings](config/README.md#move-local-data-or-change-compute)
 
-Chạy cả pipeline:
+Run `python -m config.check --stage crawl` before preparing data. After preparation, use `--stage index`, `--stage chat`, or `--stage evaluate` to check the corresponding local prerequisites and configuration. [Configuration checks](config/README.md#check-the-resolved-settings)
 
-```powershell
-python -m pipelines.prepare_data
+The example uses Gemini. Fill in `GEMINI_API_KEY` with a key from [Google AI Studio](https://aistudio.google.com/apikey). Change `GEMINI_MODEL` to select a different Gemini model.
+
+```dotenv
+LLM_PROVIDER=gemini
+GEMINI_API_KEY=your_api_key
+GEMINI_MODEL=gemini-3.5-flash-lite
 ```
 
-Dùng raw data đã có:
+To use Groq, set `LLM_PROVIDER=groq`, fill in `GROQ_API_KEY`, and select a model with `GROQ_MODEL`. The example provides `openai/gpt-oss-120b`.
 
-```powershell
-python -m pipelines.prepare_data --skip-crawl
+For Qdrant Cloud, set `QDRANT_URL` to the HTTPS cluster endpoint and `QDRANT_API_KEY` to the cluster database key. The example uses Qdrant Cloud Inference with `intfloat/multilingual-e5-small` for both document and query embeddings. Enable Cloud Inference on the cluster if needed.
+
+## 2. Prepare the data
+
+```bash
+python -m data_pipeline.prepare --all-products --skip-index
 ```
 
-Hoặc chạy riêng từng bước:
+This crawls NVD and builds structured records and evidence chunks. Exact CVE lookup and version checks use the processed files. Semantic search also uses a Qdrant collection. Build it after configuring your cluster.
 
-```powershell
-python -m ingestion.crawler
-python -m ingestion.processor
-python -m indexing.indexer
+```bash
+python -m data_pipeline.index
 ```
 
-Tạo lại collection khi đổi schema hoặc embedding model:
+Use a fresh collection for a new corpus or when changing embedding models. The explicit `--recreate` option drops and rebuilds the configured collection. With `EMBEDDING_PROVIDER=qdrant_cloud`, Qdrant generates vectors from the text sent by the app. See the [data pipeline guide](data_pipeline/README.md) for the individual commands and manifest layout.
 
-```powershell
-python -m indexing.indexer --recreate
+## 3. Ask a question
+
+```bash
+python -m rag.generation.chatbot --text "Which CVEs affect OpenSSH 9.7p1?"
+python -m uvicorn api.main:app --host 127.0.0.1 --port 8000
 ```
 
-## 6. Chọn LLM
+The API exposes `GET /health`, `POST /search`, and `POST /chat`. Open `http://127.0.0.1:8000/docs` for the request and response schemas.
 
-Ollama local:
+## 4. Run the evaluation
 
-```powershell
-docker compose --profile ollama up -d
-docker exec netvuln-ollama ollama pull qwen2.5:3b
+```bash
+python -m evaluation.build
+python -m evaluation.run
 ```
 
-```env
-LLM_PROVIDER=ollama
-OLLAMA_URL=http://localhost:11434
-OLLAMA_MODEL=qwen2.5:3b
-```
+The builder writes candidate questions to `$ARTIFACTS_DIR/evaluation/questions.jsonl`. Review the questions, expected CVEs, and citations before benchmarking. The current runner compares LLM-only and RAG on the same questions. Index the corpus in Qdrant before evaluating semantic queries. See the [evaluation guide](evaluation/README.md).
 
-Hoặc OpenAI:
+## Run the OpenSSH pilot on Kaggle
 
-```env
-LLM_PROVIDER=openai
-OPENAI_API_KEY=your-api-key
-OPENAI_MODEL=gpt-4.1-mini
-```
+1. Open a Kaggle Notebook with Internet enabled and use the CPU runtime. Bring in the source from the branch or snapshot you want to test, then install `requirements-cloud.txt` from the repository root. Groq runs generation and Qdrant Cloud Inference runs embeddings. [Kaggle Notebook settings](https://www.kaggle.com/docs/notebooks)
+2. Set up the [Kaggle configuration cell](config/README.md#kaggle-notebook) to load credentials from Kaggle Secrets and put data and results under `/kaggle/working`.
+3. Follow the [OpenSSH walkthrough](data_pipeline/README.md#openssh-example) for a fresh crawl or attach the saved pilot snapshot and use its matching collection and embedding settings. Keep the question file and processed manifest from the same NVD run.
+4. Check the inputs with `python -m config.check --stage evaluate --provider groq`, then run `python -m evaluation.run --provider groq --limit 5`. The benchmark paces Groq calls, retries transient errors, and saves each answer as it arrives. Use [Save & Run All](https://www.kaggle.com/docs/notebooks) to capture the notebook version and outputs under `/kaggle/working`.
 
-## 7. Sử dụng
-
-Chat trong terminal:
-
-```powershell
-python -m generation.chatbot
-```
-
-Gửi một câu rồi thoát:
-
-```powershell
-python -m generation.chatbot --text "FortiOS 7.2.5 có bị CVE-2024-21762 ảnh hưởng không?"
-```
-
-Chạy API:
-
-```powershell
-uvicorn api.main:app --reload --host 127.0.0.1 --port 8000
-```
-
-Swagger UI: `http://127.0.0.1:8000/docs`.
-
-Retrieval không gọi LLM:
-
-```http
-POST /search
-Content-Type: application/json
-
-{"query": "CVE-2024-21762", "top_k": 5}
-```
-
-Chat có RAG:
-
-```http
-POST /chat
-Content-Type: application/json
-
-{
-  "question": "Phiên bản 7.2.5 có bị CVE-2024-21762 ảnh hưởng không?",
-  "provider": "ollama",
-  "top_k": 5
-}
-```
-
-## 8. Mở rộng project
-
-### Thêm nguồn dữ liệu
-
-1. Tạo adapter mới trực tiếp trong `ingestion/` và implement `SourceAdapter`.
-2. Chuyển dữ liệu về schema chung có các field `vulnerability_id`, `vendor`, `product`, `description`, `affected_versions`, `source_url` và `source`.
-3. Đăng ký adapter trong `ingestion/registry.py`.
-4. Đặt `DATA_SOURCE` trong `.env`.
-
-Indexer, retriever, chatbot và API không cần sửa.
-
-### Thêm LLM provider
-
-Thêm hàm generate và đăng ký provider trong `generation/client.py`. API nhận provider dạng chuỗi nên không phải thay request schema.
-
-### Đổi vector database hoặc embedding
-
-Interface cần thay nằm trong `indexing/indexer.py` và `retrieval/retriever.py`; ingestion, LLM và API không phụ thuộc schema riêng của NVD.
-
-## 9. Evaluation
-
-Sau khi build index và khởi động LLM:
-
-```powershell
-python -m tests.evaluation.run_evaluation --provider ollama
-```
-
-Kết quả được lưu tại `artifacts/evaluation/<timestamp>/`. Xem [hướng dẫn evaluation](tests/evaluation/README.md).
-
-## 10. Kiểm tra code
-
-Chỉ kiểm tra syntax, không crawl, tải model, gọi vector store hoặc LLM:
-
-```powershell
-python -m compileall -q api config generation indexing ingestion pipelines retrieval tests
-```
-
-Unit test logic:
-
-```powershell
-pytest -q
-```
-
-## 11. Giới hạn hiện tại
-
-- Adapter có sẵn mới chỉ là NVD.
-- Identifier parser hiện hỗ trợ CVE.
-- Dense retrieval, chưa có BM25, hybrid search hoặc reranker.
-- Version matcher phù hợp nhất với version số như `7.2.5`.
-- “Không tìm thấy” chỉ có nghĩa là không có evidence trong index hiện tại.
+Run the offline test suite with `python -m pytest -q`.

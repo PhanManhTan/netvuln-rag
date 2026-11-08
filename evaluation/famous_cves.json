@@ -1,0 +1,8 @@
+[
+  {"vulnerability_id": "CVE-2018-14847", "product_id": "routeros", "reason": "Review candidate: widely discussed RouterOS/Winbox credential-disclosure incident."},
+  {"vulnerability_id": "CVE-2019-3924", "product_id": "routeros", "reason": "Review candidate: publicly documented RouterOS firewall-bypass issue."},
+  {"vulnerability_id": "CVE-2023-30799", "product_id": "routeros", "reason": "Review candidate: highly visible RouterOS privilege-escalation issue."},
+  {"vulnerability_id": "CVE-2018-13379", "product_id": "fortios", "reason": "Review candidate: widely exploited FortiOS SSL-VPN path-traversal issue."},
+  {"vulnerability_id": "CVE-2022-40684", "product_id": "fortios", "reason": "Review candidate: highly visible FortiOS authentication-bypass issue."},
+  {"vulnerability_id": "CVE-2023-27997", "product_id": "fortios", "reason": "Review candidate: highly visible FortiOS SSL-VPN memory-corruption issue."}
+]

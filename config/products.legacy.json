@@ -1,0 +1,32 @@
+{
+  "products": [
+    {
+      "product_id": "routeros",
+      "vendor": "mikrotik",
+      "product": "routeros",
+      "display_name": "MikroTik RouterOS",
+      "aliases": [
+        "routeros",
+        "mikrotik routeros",
+        "mikrotik"
+      ],
+      "cpe": "cpe:2.3:o:mikrotik:routeros:*:*:*:*:*:*:*:*",
+      "version_strategy": "numeric_branch_intervals",
+      "vendor_source": "mikrotik_curated"
+    },
+    {
+      "product_id": "fortios",
+      "vendor": "fortinet",
+      "product": "fortios",
+      "display_name": "Fortinet FortiOS",
+      "aliases": [
+        "fortios",
+        "fortinet os",
+        "fortinet fortios"
+      ],
+      "cpe": "cpe:2.3:o:fortinet:fortios:*:*:*:*:*:*:*:*",
+      "version_strategy": "numeric_branch_intervals",
+      "vendor_source": "fortiguard"
+    }
+  ]
+}

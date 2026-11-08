@@ -1,0 +1,107 @@
+{
+  "products": [
+    {
+      "product_id": "openssh",
+      "vendor": "openbsd",
+      "product": "openssh",
+      "display_name": "OpenSSH",
+      "aliases": [
+        "open ssh"
+      ],
+      "cpe": "cpe:2.3:a:openbsd:openssh:*:*:*:*:*:*:*:*",
+      "versions": [
+        {
+          "version": "9.5p1",
+          "cpe": "cpe:2.3:a:openbsd:openssh:9.5:p1:*:*:*:*:*:*"
+        },
+        {
+          "version": "9.6p1",
+          "cpe": "cpe:2.3:a:openbsd:openssh:9.6:p1:*:*:*:*:*:*"
+        },
+        {
+          "version": "9.7p1",
+          "cpe": "cpe:2.3:a:openbsd:openssh:9.7:p1:*:*:*:*:*:*"
+        },
+        {
+          "version": "9.8p1",
+          "cpe": "cpe:2.3:a:openbsd:openssh:9.8:p1:*:*:*:*:*:*"
+        },
+        {
+          "version": "9.9p1",
+          "cpe": "cpe:2.3:a:openbsd:openssh:9.9:p1:*:*:*:*:*:*"
+        }
+      ]
+    },
+    {
+      "product_id": "openvpn",
+      "vendor": "openvpn",
+      "product": "openvpn",
+      "display_name": "OpenVPN Community",
+      "aliases": [
+        "open vpn"
+      ],
+      "cpe": "cpe:2.3:a:openvpn:openvpn:*:*:*:*:community:*:*:*",
+      "versions": [
+        {
+          "version": "2.6.8",
+          "cpe": "cpe:2.3:a:openvpn:openvpn:2.6.8:*:*:*:community:*:*:*"
+        },
+        {
+          "version": "2.6.9",
+          "cpe": "cpe:2.3:a:openvpn:openvpn:2.6.9:*:*:*:community:*:*:*"
+        },
+        {
+          "version": "2.6.10",
+          "cpe": "cpe:2.3:a:openvpn:openvpn:2.6.10:*:*:*:community:*:*:*"
+        },
+        {
+          "version": "2.6.11",
+          "cpe": "cpe:2.3:a:openvpn:openvpn:2.6.11:*:*:*:community:*:*:*"
+        },
+        {
+          "version": "2.6.12",
+          "cpe": "cpe:2.3:a:openvpn:openvpn:2.6.12:*:*:*:community:*:*:*"
+        }
+      ]
+    },
+    {
+      "product_id": "fortios",
+      "vendor": "fortinet",
+      "product": "fortios",
+      "display_name": "Fortinet FortiOS",
+      "aliases": [
+        "fortios",
+        "fortinet os",
+        "fortinet fortios"
+      ],
+      "cpe": "cpe:2.3:o:fortinet:fortios:*:*:*:*:*:*:*:*",
+      "version_strategy": "numeric_branch_intervals",
+      "versions": [
+        {
+          "version": "7.2.7",
+          "cpe": "cpe:2.3:o:fortinet:fortios:7.2.7:*:*:*:*:*:*:*"
+        },
+        {
+          "version": "7.2.8",
+          "cpe": "cpe:2.3:o:fortinet:fortios:7.2.8:*:*:*:*:*:*:*"
+        },
+        {
+          "version": "7.2.9",
+          "cpe": "cpe:2.3:o:fortinet:fortios:7.2.9:*:*:*:*:*:*:*"
+        },
+        {
+          "version": "7.4.3",
+          "cpe": "cpe:2.3:o:fortinet:fortios:7.4.3:*:*:*:*:*:*:*"
+        },
+        {
+          "version": "7.4.4",
+          "cpe": "cpe:2.3:o:fortinet:fortios:7.4.4:*:*:*:*:*:*:*"
+        },
+        {
+          "version": "7.4.5",
+          "cpe": "cpe:2.3:o:fortinet:fortios:7.4.5:*:*:*:*:*:*:*"
+        }
+      ]
+    }
+  ]
+}
