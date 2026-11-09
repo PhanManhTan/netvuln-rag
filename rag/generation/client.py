@@ -97,7 +97,7 @@ class LLMClient:
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ],
-            "max_completion_tokens": 2048,
+            "max_completion_tokens": self.settings.llm_max_output_tokens,
         }
         if model in {"openai/gpt-oss-20b", "openai/gpt-oss-120b"}:
             payload["reasoning_effort"] = "low"

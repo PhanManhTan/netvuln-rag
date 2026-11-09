@@ -170,6 +170,12 @@ class Settings:
 
     top_k: int = field(default_factory=lambda: int(os.getenv("TOP_K", "5")))
     min_score: float = field(default_factory=lambda: float(os.getenv("MIN_SCORE", "0")))
+    llm_max_output_tokens: int = field(
+        default_factory=lambda: int(os.getenv("LLM_MAX_OUTPUT_TOKENS", "2048"))
+    )
+    context_max_chars: int = field(
+        default_factory=lambda: int(os.getenv("CONTEXT_MAX_CHARS", "6000"))
+    )
 
     def __post_init__(self) -> None:
         if self.embedding_device == "auto":
@@ -180,6 +186,8 @@ class Settings:
             ("TOP_K", self.top_k),
             ("SOURCE_REQUEST_TIMEOUT", self.source_request_timeout),
             ("LLM_TIMEOUT", self.llm_timeout),
+            ("LLM_MAX_OUTPUT_TOKENS", self.llm_max_output_tokens),
+            ("CONTEXT_MAX_CHARS", self.context_max_chars),
         ):
             if not isfinite(value) or value <= 0:
                 raise ValueError(f"{name} must be finite and positive")

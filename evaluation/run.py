@@ -182,9 +182,9 @@ def main() -> int:
         parser.error("--context-max-chars must be positive")
     requested_modes = args.modes or (("llm_only", "llm_document", "rag") if args.with_documents else DEFAULT_MODES)
     modes = [mode for mode in SCORE_KEYS if mode in requested_modes]
-    context_budget = args.context_max_chars or DOCUMENT_CONTEXT_MAX_CHARS
+    context_budget = args.context_max_chars or settings.context_max_chars
     uses_context_baseline = any(mode in CONTEXT_BASELINES for mode in modes)
-    max_chars = context_budget if uses_context_baseline else args.context_max_chars
+    max_chars = context_budget if uses_context_baseline else (args.context_max_chars or settings.context_max_chars)
     interval = args.request_interval
     if interval is None:
         interval = 6.0 if args.provider == "groq" else 0.0
