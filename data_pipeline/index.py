@@ -142,7 +142,7 @@ def build_index(
     else:
         chunk_rows = list(load_chunks(input_path, product_ids))
 
-    chunk_texts = [chunk.text for chunk in chunk_rows]
+    chunk_texts = [settings.embedding_document_prefix + chunk.text for chunk in chunk_rows]
 
     if not chunk_texts:
         raise ValueError("Dataset không có chunk để index.")
@@ -151,7 +151,7 @@ def build_index(
     vectors: list[models.Document] | list[list[float]]
     if cloud:
         vectors = [
-            models.Document(text=settings.embedding_document_prefix + text, model=settings.embedding_model)
+            models.Document(text=text, model=settings.embedding_model)
             for text in chunk_texts
         ]
         vector_size = settings.embedding_dimensions

@@ -25,6 +25,32 @@ if TYPE_CHECKING:
     from sentence_transformers import SentenceTransformer
 
 
+def format_evidence_context(
+    results: list[SearchResult],
+    version_matches: list[VersionDecision] | None = None,
+    *,
+    max_chars: int | None = None,
+) -> tuple[str, list[dict[str, str]]]:
+    matches = {match.vulnerability_id: match for match in version_matches or []}
+    blocks: list[str] = []
+    citations: list[dict[str, str]] = []
+    separator = "\n\n---\n\n"
+    context_chars = 0
+    for result in results:
+        label = f"S{len(blocks) + 1}"
+        decision = matches.get(result.vulnerability_id)
+        decision_text = f"\nVersion decision: {decision.status.value}. {decision.reason}" if decision else ""
+        block = f"[{label}] {result.vulnerability_id}\nSource: {result.source_url}{decision_text}\n{result.text}"
+        if max_chars is not None and len(block) > max_chars:
+            continue
+        context_chars += len(block) + (len(separator) if blocks else 0)
+        if max_chars is not None and context_chars > max_chars:
+            break
+        blocks.append(block)
+        citations.append({"source_id": label, "vulnerability_id": result.vulnerability_id, "url": result.source_url})
+    return separator.join(blocks), citations
+
+
 class Retriever:
     """Use validated records for conclusions and chunks only as supporting evidence."""
 
@@ -173,6 +199,10 @@ class Retriever:
             and (not product_id or chunk.product_id == product_id)
         ]
 
+    def search_bm25(self, question: str, top_k: int) -> list[SearchResult]:
+        query = parse_query(question, default_product=self.settings.default_product_id, catalog=self.catalog)
+        return self._bm25_search(question, top_k, query.product_id)
+
     def _bm25_search(self, question: str, top_k: int, product_id: str | None) -> list[SearchResult]:
         scored = [
             (score, chunk) for score, chunk in zip(self.bm25.scores(question), self.chunks, strict=True)
@@ -182,13 +212,14 @@ class Retriever:
         return [self._chunk_result(chunk, score) for score, chunk in scored[:top_k]]
 
     def _dense_search(self, question: str, top_k: int, product_id: str | None) -> list[SearchResult]:
+        query_text = self.settings.embedding_query_prefix + question
         if self.settings.embedding_provider == "qdrant_cloud":
             vector = models.Document(
-                text=self.settings.embedding_query_prefix + question,
+                text=query_text,
                 model=self.settings.embedding_model,
             )
         else:
-            vector = self.embedding_model.encode(question, normalize_embeddings=True).tolist()
+            vector = self.embedding_model.encode(query_text, normalize_embeddings=True).tolist()
         response = self.client.query_points(
             collection_name=self.settings.qdrant_collection,
             query=vector,
@@ -222,17 +253,8 @@ class Retriever:
             for point_id, score in sorted(scores.items(), key=lambda item: item[1], reverse=True)[:top_k]
         ]
 
-    def format_context(self, bundle: SearchBundle) -> tuple[str, list[dict[str, str]]]:
-        matches = {match.vulnerability_id: match for match in bundle.version_matches}
-        blocks: list[str] = []
-        citations: list[dict[str, str]] = []
-        for index, result in enumerate(bundle.results, 1):
-            label = f"S{index}"
-            decision = matches.get(result.vulnerability_id)
-            decision_text = f"\nVersion decision: {decision.status.value}. {decision.reason}" if decision else ""
-            blocks.append(f"[{label}] {result.vulnerability_id}\nSource: {result.source_url}{decision_text}\n{result.text}")
-            citations.append({"source_id": label, "vulnerability_id": result.vulnerability_id, "url": result.source_url})
-        return "\n\n---\n\n".join(blocks), citations
+    def format_context(self, bundle: SearchBundle, *, max_chars: int | None = None) -> tuple[str, list[dict[str, str]]]:
+        return format_evidence_context(bundle.results, bundle.version_matches, max_chars=max_chars)
 
     def health(self) -> dict[str, Any]:
         if not self.records or not self.chunks:

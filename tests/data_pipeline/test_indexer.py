@@ -49,7 +49,7 @@ def test_indexer_uses_prebuilt_source_attributed_chunks(tmp_path: Path, monkeypa
 
     def encode_locally(texts, settings):
         assert provider == "local"
-        assert texts == [chunk.text]
+        assert texts == ["passage: " + chunk.text]
         return [[1.0, 0.0]], 2
 
     monkeypatch.setattr(indexer, "_encode_local", encode_locally)

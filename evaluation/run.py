@@ -1,4 +1,4 @@
-"""Run the same questions with LLM-only and RAG, then compare metrics."""
+"""Run selected CVE question-answering modes on the same benchmark questions."""
 
 from __future__ import annotations
 
@@ -6,8 +6,10 @@ import argparse
 import json
 import math
 import time
+from collections.abc import Callable
 from datetime import UTC, datetime
 from functools import partial
+from itertools import combinations
 from pathlib import Path
 from typing import Any
 
@@ -15,7 +17,8 @@ from config.products import get_product_catalog
 from config.settings import get_settings
 from data_pipeline.cve_catalog import load_catalog, load_catalog_manifest
 from data_pipeline.process import load_processed_manifest, resolve_processed_artifact
-from evaluation.client import BenchmarkClient
+from evaluation.baselines import Evidence, bm25_context, document_contexts, raw_contexts, raw_snapshot_ids
+from evaluation.client import BenchmarkClient, summarize_usage
 from evaluation.dataset import load_questions, validate_question_runs
 from evaluation.metrics import compare_summaries, extract_cves, infer_status, summarize
 from rag.generation.chatbot import RAGChatbot, SOURCE_LIST_SEPARATOR, load_prompts
@@ -24,6 +27,17 @@ from rag.retrieval.retriever import Retriever
 
 
 BASELINE_SYSTEM_PROMPT = load_prompts()["baseline_system_prompt"]
+DOCUMENT_CONTEXT_MAX_CHARS = 6000
+SCORE_KEYS = {
+    "llm_only": "baseline",
+    "llm_document": "document",
+    "llm_raw": "raw",
+    "llm_bm25": "bm25",
+    "rag": "rag",
+}
+DEFAULT_MODES = ("llm_only", "rag")
+CONTEXT_BASELINES = ("llm_document", "llm_raw", "llm_bm25")
+Runner = Callable[[dict[str, Any]], dict[str, Any]]
 
 
 def _answer_status(answer: str, question_type: str) -> str:
@@ -56,13 +70,32 @@ def run_baseline(
 
 
 def run_rag(
-    item: dict[str, Any], chatbot: RAGChatbot, provider: str, top_k: int
+    item: dict[str, Any], chatbot: RAGChatbot, provider: str, top_k: int,
+    max_context_chars: int | None = None,
+) -> dict[str, Any]:
+    options = {"max_context_chars": max_context_chars} if max_context_chars is not None else {}
+    return _run_with_evidence(item, "rag", partial(chatbot.ask, item["question"], provider, top_k, **options))
+
+
+def run_context_baseline(
+    item: dict[str, Any], chatbot: RAGChatbot, provider: str, mode: str,
+    evidence: Callable[[dict[str, Any]], Evidence],
+) -> dict[str, Any]:
+    def answer() -> dict[str, Any]:
+        context, sources = evidence(item)
+        return chatbot.answer_with_evidence(item["question"], context, sources, provider)
+
+    return _run_with_evidence(item, mode, answer)
+
+
+def _run_with_evidence(
+    item: dict[str, Any], mode: str, answer_question: Callable[[], dict[str, Any]],
 ) -> dict[str, Any]:
     started = time.perf_counter()
     error = None
     evidence_cves = []
     try:
-        response = chatbot.ask(item["question"], provider=provider, top_k=top_k)
+        response = answer_question()
         answer = response["answer"]
         citations = response["citations"]
         evidence_cves = response.get("retrieved_evidence_cves")
@@ -74,7 +107,7 @@ def run_rag(
                 answer = answer.rsplit(SOURCE_LIST_SEPARATOR, 1)[0]
             predicted_status = _answer_status(answer, item["question_type"])
         elif predicted_status == "error":
-            error = answer or "RAG returned an error."
+            error = answer or "Generation returned an error."
     except Exception as exc:
         answer = ""
         predicted_status = "error"
@@ -82,11 +115,11 @@ def run_rag(
         error = str(exc) or type(exc).__name__
     return {
         **item,
-        "mode": "rag",
+        "mode": mode,
         "answer": answer,
         "predicted_status": predicted_status,
         "citations": citations,
-        "retrieved_evidence_cves": sorted(set(evidence_cves)),
+        ("retrieved_evidence_cves" if mode == "rag" else "document_evidence_cves"): sorted(set(evidence_cves)),
         "latency_seconds": time.perf_counter() - started,
         "error": error,
     }
@@ -107,7 +140,7 @@ def write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
 
 def main() -> int:
     settings = get_settings()
-    parser = argparse.ArgumentParser(description="Compare LLM-only with RAG")
+    parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--dataset",
         type=Path,
@@ -131,6 +164,10 @@ def main() -> int:
     )
     parser.add_argument("--top-k", type=int, default=settings.top_k)
     parser.add_argument("--limit", type=int, default=None)
+    modes_group = parser.add_mutually_exclusive_group()
+    modes_group.add_argument("--with-documents", action="store_true", help="Run LLM-only, fixed documents, and RAG")
+    modes_group.add_argument("--modes", nargs="+", choices=SCORE_KEYS, help="Run just the selected modes")
+    parser.add_argument("--context-max-chars", type=int, help="Shared character limit for evidence blocks")
     parser.add_argument(
         "--request-interval", type=float, default=None,
         help="Minimum seconds between LLM attempts (default: 6 for Groq, 0 for other providers)",
@@ -141,6 +178,13 @@ def main() -> int:
         parser.error(f"Unsupported LLM provider: {args.provider}")
     if args.top_k < 1 or (args.limit is not None and args.limit < 1):
         parser.error("--top-k and --limit must be positive")
+    if args.context_max_chars is not None and args.context_max_chars < 1:
+        parser.error("--context-max-chars must be positive")
+    requested_modes = args.modes or (("llm_only", "llm_document", "rag") if args.with_documents else DEFAULT_MODES)
+    modes = [mode for mode in SCORE_KEYS if mode in requested_modes]
+    context_budget = args.context_max_chars or DOCUMENT_CONTEXT_MAX_CHARS
+    uses_context_baseline = any(mode in CONTEXT_BASELINES for mode in modes)
+    max_chars = context_budget if uses_context_baseline else args.context_max_chars
     interval = args.request_interval
     if interval is None:
         interval = 6.0 if args.provider == "groq" else 0.0
@@ -167,16 +211,32 @@ def main() -> int:
     if not questions:
         parser.error("Evaluation dataset has no questions")
 
-    catalog = get_product_catalog(settings.product_config_file)
-    enabled_products = {profile.product_id for profile in catalog.products}
+    question_products = {item["product_id"] for item in questions}
+    processed_manifest = None
+    products = []
+    snapshot_paths: dict[str, list[Path]] = {"structured": [], "chunks": []}
+    raw_runs: dict[str, str] = {}
+    evidence_by_mode: dict[str, Callable[[dict[str, Any]], Evidence]] = {}
     try:
-        processed_manifest = load_processed_manifest(settings)
-        products = [row for row in processed_manifest["products"] if row["product_id"] in enabled_products]
-        validate_question_runs(questions, {"products": products}, settings.data_source)
-        snapshot_paths = {
-            kind: [resolve_processed_artifact(settings, row, kind) for row in products]
-            for kind in ("structured", "chunks")
-        }
+        catalog = get_product_catalog(settings.product_config_file)
+        if any(mode in modes for mode in ("llm_document", "llm_bm25", "rag")):
+            enabled_products = {profile.product_id for profile in catalog.products}
+            processed_manifest = load_processed_manifest(settings)
+            products = [row for row in processed_manifest["products"] if row["product_id"] in enabled_products]
+            validate_question_runs(questions, {"products": products}, settings.data_source)
+            snapshot_paths["chunks"] = [resolve_processed_artifact(settings, row, "chunks") for row in products]
+            if "rag" in modes:
+                snapshot_paths["structured"] = [resolve_processed_artifact(settings, row, "structured") for row in products]
+        retriever = Retriever(settings, snapshot_paths=snapshot_paths)
+        if "llm_document" in modes:
+            documents = document_contexts(retriever, question_products, context_budget)
+            evidence_by_mode["llm_document"] = lambda item: documents[item["product_id"]]
+        if "llm_raw" in modes:
+            raw_runs = raw_snapshot_ids(questions, products, settings.data_source)
+            raw_documents = raw_contexts(settings, catalog, raw_runs, context_budget)
+            evidence_by_mode["llm_raw"] = lambda item: raw_documents[item["product_id"]]
+        if "llm_bm25" in modes:
+            evidence_by_mode["llm_bm25"] = lambda item: bm25_context(retriever, item["question"], args.top_k, context_budget)
     except (OSError, ValueError) as exc:
         parser.error(str(exc))
 
@@ -186,7 +246,16 @@ def main() -> int:
     known_cves = load_catalog(catalog_path) if catalog_path is not None else None
     catalog_manifest = load_catalog_manifest(catalog_path) if catalog_path is not None else None
     llm = BenchmarkClient(settings, interval, args.max_retries)
-    chatbot = RAGChatbot(settings=settings, llm=llm, retriever=Retriever(settings, snapshot_paths=snapshot_paths))
+    chatbot = RAGChatbot(settings=settings, llm=llm, retriever=retriever)
+    available_runners: dict[str, Runner] = {
+        "llm_only": partial(run_baseline, llm=llm, provider=args.provider),
+        "rag": partial(run_rag, chatbot=chatbot, provider=args.provider, top_k=args.top_k, max_context_chars=max_chars),
+    }
+    available_runners.update({
+        mode: partial(run_context_baseline, chatbot=chatbot, provider=args.provider, mode=mode, evidence=evidence)
+        for mode, evidence in evidence_by_mode.items()
+    })
+    runners = {mode: available_runners[mode] for mode in modes}
     started_at = datetime.now(UTC)
     run_dir = args.output_dir / started_at.strftime("%Y%m%dT%H%M%S.%fZ")
     run_dir.mkdir(parents=True, exist_ok=False)
@@ -194,6 +263,7 @@ def main() -> int:
         "created_at": started_at.isoformat(),
         "provider": args.provider,
         "model": llm.model_name(args.provider),
+        "modes": modes,
         "top_k": args.top_k,
         "dataset": dataset_reference,
         "target_questions": len(questions),
@@ -201,50 +271,59 @@ def main() -> int:
         "max_retries": args.max_retries,
         "embedding_provider": settings.embedding_provider,
         "embedding_model": settings.embedding_model,
+        "embedding_device": (settings.embedding_device or "auto") if settings.embedding_provider == "local" else None,
         "embedding_dimensions": settings.embedding_dimensions,
         "embedding_query_prefix": settings.embedding_query_prefix,
         "qdrant_collection": settings.qdrant_collection,
         "min_score": settings.min_score,
         "default_product_id": settings.default_product_id,
-        "corpus_products": sorted(row["product_id"] for row in products),
+        "corpus_products": sorted({row["product_id"] for row in products} | raw_runs.keys()),
         "nvd_catalog": catalog_manifest,
         "processed_manifest": processed_manifest,
     }
+    if "llm_document" in modes:
+        metadata["document_selection"] = "product_prefix_in_snapshot_order"
+    if "llm_raw" in modes:
+        metadata["raw_selection"] = "whole_nvd_records_in_cve_id_order"
+        metadata["raw_runs"] = raw_runs
+    if max_chars is not None:
+        metadata["context_max_chars"] = max_chars
     write_json(run_dir / "run.json", metadata)
     write_jsonl(run_dir / "questions.jsonl", questions)
     if catalog_manifest is not None:
         write_json(run_dir / "nvd_catalog_manifest.json", catalog_manifest)
-    write_json(run_dir / "processed_manifest.json", processed_manifest)
+    if processed_manifest is not None:
+        write_json(run_dir / "processed_manifest.json", processed_manifest)
     print(f"Evaluation artifacts: {run_dir}", flush=True)
-    return run_benchmark(questions, known_cves, llm, chatbot, run_dir, metadata)
+    return run_benchmark(questions, known_cves, llm, run_dir, metadata, runners)
 
 
 def run_benchmark(
     questions: list[dict[str, Any]],
     known_cves: set[str] | None,
     llm: BenchmarkClient,
-    chatbot: RAGChatbot,
     run_dir: Path,
     metadata: dict[str, Any],
+    runners: dict[str, Runner],
 ) -> int:
-    paths = {mode: run_dir / f"{mode}_results.jsonl" for mode in ("llm_only", "rag")}
+    paths = {mode: run_dir / f"{mode}_results.jsonl" for mode in runners}
     for path in paths.values():
         path.touch()
     results: dict[str, list[dict[str, Any]]] = {mode: [] for mode in paths}
-    runners = (
-        ("llm_only", partial(run_baseline, llm=llm, provider=metadata["provider"])),
-        ("rag", partial(run_rag, chatbot=chatbot, provider=metadata["provider"], top_k=metadata["top_k"])),
-    )
+    requests_by_mode: dict[str, list[list[dict[str, Any]]]] = {mode: [] for mode in paths}
     interrupted = False
     started = time.monotonic()
     try:
         for index, item in enumerate(questions, 1):
-            for mode, runner in runners:
+            for mode, runner in runners.items():
                 if llm.stop_reason:
                     break
                 print(f"[{index}/{len(questions)}] {item['id']} - {mode}", flush=True)
                 waited_before = llm.wait_seconds
+                llm.attempts = []
+                requests_by_mode[mode].append(llm.attempts)
                 row = runner(item)
+                row["llm_requests"] = llm.attempts
                 row["latency_seconds"] = max(
                     0.0, row["latency_seconds"] - (llm.wait_seconds - waited_before)
                 )
@@ -256,14 +335,16 @@ def run_benchmark(
     except KeyboardInterrupt:
         interrupted = True
     finally:
-        pairs = list(zip(results["llm_only"], results["rag"]))
-        scored = [(b0, b2) for b0, b2 in pairs if b0["error"] is None and b2["error"] is None]
+        pairs = list(zip(*results.values()))
+        scored = [rows for rows in pairs if all(row["error"] is None for row in rows)]
         failures = {
             mode: sum(row["error"] is not None for row in rows)
             for mode, rows in results.items()
         }
-        baseline_summary = summarize((b0 for b0, _ in scored), known_cves) if scored else None
-        rag_summary = summarize((b2 for _, b2 in scored), known_cves) if scored else None
+        summaries = {
+            SCORE_KEYS[mode]: summarize((rows[index] for rows in scored), known_cves) if scored else None
+            for index, mode in enumerate(results)
+        }
         completed = len(scored) == len(questions)
         report = {
             **metadata,
@@ -273,11 +354,18 @@ def run_benchmark(
             "completed": completed,
             "stop_reason": "Interrupted" if interrupted else llm.stop_reason,
             "llm_wait_seconds": llm.wait_seconds,
+            "llm_usage": {
+                mode: {
+                    **summarize_usage(attempt for attempts in requests for attempt in attempts),
+                    "questions_with_llm_call": sum(bool(attempts) for attempts in requests),
+                }
+                for mode, requests in requests_by_mode.items()
+            },
             "wall_seconds": time.monotonic() - started,
-            "baseline": baseline_summary,
-            "rag": rag_summary,
-            "rag_minus_baseline": compare_summaries(baseline_summary, rag_summary) if scored else None,
+            **summaries,
         }
+        for left, right in combinations(summaries, 2):
+            report[f"{right}_minus_{left}"] = compare_summaries(summaries[left], summaries[right]) if scored else None
         write_json(run_dir / "summary.json", report)
         print(f"Scored {len(scored)}/{len(questions)} pairs. Summary: {run_dir / 'summary.json'}", flush=True)
     if interrupted:

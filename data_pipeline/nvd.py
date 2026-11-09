@@ -219,18 +219,23 @@ class NVDAdapter:
     def _normalize_product_query(
         self, input_path: Path, retrieved_at: str | None = None,
     ) -> dict[str, VulnerabilityRecord]:
+        records_by_id: dict[str, VulnerabilityRecord] = {}
+        for page_path, raw in self.read_product_records(input_path):
+            record = self._normalize(raw, page_path, retrieved_at=retrieved_at)
+            records_by_id[record.vulnerability_id] = record
+        return records_by_id
+
+    def read_product_records(self, input_path: Path) -> Iterable[tuple[Path, dict[str, Any]]]:
+        """Read original CVE objects from a product-level crawl."""
         page_files = self._find_page_files(input_path)
         if not page_files:
             raise FileNotFoundError(f"Không tìm thấy page_*.json trong {input_path}")
 
-        records_by_id: dict[str, VulnerabilityRecord] = {}
         for page_path in page_files:
             with page_path.open("r", encoding="utf-8") as file:
                 page = json.load(file)
             for item in page.get("vulnerabilities", []):
-                record = self._normalize(item.get("cve", {}), page_path, retrieved_at=retrieved_at)
-                records_by_id[record.vulnerability_id] = record
-        return records_by_id
+                yield page_path, item.get("cve", {})
 
     def read_version_queries(
         self, run_dir: Path, *, require_complete: bool = False

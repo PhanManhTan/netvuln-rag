@@ -51,6 +51,9 @@ class LLMClient:
         }
         return models.get(selected, selected)
 
+    def _record_response(self, provider: str, payload: dict[str, Any]) -> None:
+        """Allow benchmark callers to observe usage from a successful HTTP response."""
+
     def _generate_gemini(self, system_prompt: str, user_prompt: str) -> str:
         if not self.settings.gemini_api_key:
             raise ValueError("GEMINI_API_KEY chưa được cấu hình.")
@@ -72,6 +75,7 @@ class LLMClient:
         )
         response.raise_for_status()
         result = response.json()
+        self._record_response("gemini", result)
         candidate = next(iter(result.get("candidates") or []), {})
         parts = (candidate.get("content") or {}).get("parts", [])
         text = "".join(part.get("text", "") for part in parts if not part.get("thought")).strip()
@@ -106,7 +110,9 @@ class LLMClient:
             allow_redirects=False,
         )
         response.raise_for_status()
-        choice = next(iter(response.json().get("choices") or []), {})
+        result = response.json()
+        self._record_response("groq", result)
+        choice = next(iter(result.get("choices") or []), {})
         text = (choice.get("message", {}).get("content") or "").strip()
         if not text:
             raise RuntimeError("Groq trả về nội dung rỗng.")
@@ -127,7 +133,9 @@ class LLMClient:
             timeout=self.settings.llm_timeout,
         )
         response.raise_for_status()
-        content = response.json().get("message", {}).get("content", "").strip()
+        result = response.json()
+        self._record_response("ollama", result)
+        content = result.get("message", {}).get("content", "").strip()
         if not content:
             raise RuntimeError("Ollama trả về nội dung rỗng.")
         return content
@@ -149,7 +157,9 @@ class LLMClient:
             timeout=self.settings.llm_timeout,
         )
         response.raise_for_status()
-        return self._read_openai_text(response.json())
+        result = response.json()
+        self._record_response("openai", result)
+        return self._read_openai_text(result)
 
     @staticmethod
     def _read_openai_text(payload: dict[str, Any]) -> str:

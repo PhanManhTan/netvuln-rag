@@ -86,8 +86,14 @@ def test_dense_search_resolves_only_chunks_from_the_current_snapshot() -> None:
 def test_local_embedding_uses_configured_device_and_cache(monkeypatch, tmp_path) -> None:
     constructor = Mock()
     monkeypatch.setitem(sys.modules, "sentence_transformers", SimpleNamespace(SentenceTransformer=constructor))
-    settings = Settings(embedding_device="cpu", embedding_cache_dir=tmp_path)
+    settings = Settings(
+        embedding_provider="local", embedding_device="cpu", embedding_cache_dir=tmp_path,
+        embedding_query_prefix="query: ",
+    )
     retriever = Retriever(settings)
+    retriever._client = Mock()
+    retriever._client.query_points.return_value.points = []
 
-    assert retriever.embedding_model is constructor.return_value
+    assert retriever._dense_search("OpenSSH weakness", 5, "openssh") == []
     constructor.assert_called_once_with(settings.embedding_model, device="cpu", cache_folder=str(tmp_path))
+    constructor.return_value.encode.assert_called_once_with("query: OpenSSH weakness", normalize_embeddings=True)

@@ -10,7 +10,7 @@ requires-python = ">=3.11"
 dynamic = ["dependencies"]
 
 [tool.setuptools.dynamic]
-dependencies = {file = ["requirements-cloud.txt"]}
+dependencies = {file = ["requirements.txt"]}
 
 [tool.setuptools.packages.find]
 include = ["api", "config", "data_pipeline", "evaluation", "rag", "rag.*"]

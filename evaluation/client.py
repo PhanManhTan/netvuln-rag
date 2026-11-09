@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import math
 import time
+from collections.abc import Iterable
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
+from typing import Any
 
 import requests
 
@@ -15,6 +17,69 @@ from rag.generation.client import LLMClient
 
 RETRYABLE_STATUS = {429, 500, 502, 503, 504}
 MAX_RETRY_DELAY = 60
+TOKEN_FIELDS = ("input_tokens", "output_tokens", "total_tokens", "reasoning_tokens", "cached_input_tokens")
+
+
+def _object(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _count(value: Any) -> int | None:
+    return value if type(value) is int and value >= 0 else None
+
+
+def _read_usage(provider: str, payload: dict[str, Any]) -> dict[str, int]:
+    usage = _object(payload.get("usage"))
+    if provider == "gemini":
+        usage = _object(payload.get("usageMetadata"))
+        input_tokens = _count(usage.get("promptTokenCount"))
+        total_tokens = _count(usage.get("totalTokenCount"))
+        reasoning_tokens = _count(usage.get("thoughtsTokenCount"))
+        candidates = _count(usage.get("candidatesTokenCount"))
+        if input_tokens is not None and total_tokens is not None and total_tokens >= input_tokens:
+            output_tokens = total_tokens - input_tokens
+        else:
+            output_tokens = candidates + (reasoning_tokens or 0) if candidates is not None else None
+        cached_tokens = _count(usage.get("cachedContentTokenCount"))
+    elif provider == "ollama":
+        input_tokens = _count(payload.get("prompt_eval_count"))
+        output_tokens = _count(payload.get("eval_count"))
+        cached_tokens = _count(payload.get("prompt_eval_cached_count"))
+        total_tokens = reasoning_tokens = None
+    else:
+        input_key, output_key = (
+            ("prompt_tokens", "completion_tokens") if provider == "groq" else ("input_tokens", "output_tokens")
+        )
+        input_tokens = _count(usage.get(input_key))
+        output_tokens = _count(usage.get(output_key))
+        total_tokens = _count(usage.get("total_tokens"))
+        reasoning_tokens = _count(_object(usage.get(f"{output_key}_details")).get("reasoning_tokens"))
+        cached_tokens = _count(_object(usage.get(f"{input_key}_details")).get("cached_tokens"))
+    if total_tokens is None and input_tokens is not None and output_tokens is not None:
+        total_tokens = input_tokens + output_tokens
+    counts = {
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "total_tokens": total_tokens,
+        "reasoning_tokens": reasoning_tokens,
+        "cached_input_tokens": cached_tokens,
+    }
+    return {field: value for field, value in counts.items() if value is not None}
+
+
+def summarize_usage(attempts: Iterable[dict[str, Any]]) -> dict[str, Any]:
+    recorded = list(attempts)
+    count = len(recorded)
+    reported = {field: [attempt[field] for attempt in recorded if field in attempt] for field in TOKEN_FIELDS}
+    return {
+        "attempts": count,
+        "failed_attempts": sum(not attempt["succeeded"] for attempt in recorded),
+        "average_request_latency_seconds": (
+            sum(attempt["latency_seconds"] for attempt in recorded) / count if count else None
+        ),
+        **{field: sum(values) if values or not count else None for field, values in reported.items()},
+        "reported_attempts": {field: len(values) for field, values in reported.items()},
+    }
 
 
 def _retry_after(value: str) -> float:
@@ -40,7 +105,11 @@ class BenchmarkClient(LLMClient):
         self.max_retries = max_retries
         self.wait_seconds = 0.0
         self.stop_reason: str | None = None
+        self.attempts: list[dict[str, Any]] = []
         self._next_request = 0.0
+
+    def _record_response(self, provider: str, payload: dict[str, Any]) -> None:
+        self.attempts[-1].update(_read_usage(provider, payload))
 
     def generate(self, system_prompt: str, user_prompt: str, provider: str | None = None) -> str:
         retries = 0
@@ -50,10 +119,15 @@ class BenchmarkClient(LLMClient):
             if remaining > 0:
                 time.sleep(remaining)
                 self.wait_seconds += time.monotonic() - started_wait
-            self._next_request = time.monotonic() + self.request_interval
+            request_started = time.monotonic()
+            self._next_request = request_started + self.request_interval
+            attempt: dict[str, Any] = {"succeeded": False}
+            self.attempts.append(attempt)
 
             try:
-                return super().generate(system_prompt, user_prompt, provider)
+                answer = super().generate(system_prompt, user_prompt, provider)
+                attempt["succeeded"] = True
+                return answer
             except requests.HTTPError as exc:
                 if exc.response is None:
                     raise
@@ -74,3 +148,5 @@ class BenchmarkClient(LLMClient):
                 self._next_request = max(self._next_request, now + delay)
                 wait = self._next_request - now
                 print(f"LLM HTTP {status}, retry {retries}/{self.max_retries} scheduled after {wait:g}s", flush=True)
+            finally:
+                attempt["latency_seconds"] = time.monotonic() - request_started

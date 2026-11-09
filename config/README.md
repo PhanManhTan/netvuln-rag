@@ -2,6 +2,19 @@
 
 The product catalog defines what to crawl. Runtime settings define where to store files and which services to call. [`products.json`](products.json) contains the proposal's OpenSSH, OpenVPN Community, and FortiOS profiles. [`.env.example`](../.env.example) lists the supported runtime variables.
 
+## Choose services and device
+
+Install `requirements.txt` in either environment. Set these options in `.env` on a laptop or as environment variables in a notebook.
+
+| Setting | Local service or device | Remote service |
+| --- | --- | --- |
+| `LLM_PROVIDER` | `ollama` with `OLLAMA_URL` and `OLLAMA_MODEL` | `groq`, `gemini`, or `openai` with the provider's key and model |
+| `QDRANT_URL` | `http://localhost:6333` with a running Qdrant server | Cluster HTTPS URL with `QDRANT_API_KEY` |
+| `EMBEDDING_PROVIDER` | `local` to run Sentence Transformers in Python | `qdrant_cloud` to use Qdrant Cloud Inference |
+| `EMBEDDING_DEVICE` | `auto` to choose an available device, `cpu` to force CPU, or `cuda:0` to select the first GPU | Qdrant Cloud Inference selects its own device |
+
+Embedding computation and vector storage are independent. Local embeddings can be written to either a local or remote Qdrant server. Both embedding providers use the configured document and query prefixes. Rebuild the index after changing the model, provider, or prefixes, including when reusing a local index built before local embeddings applied prefixes. Ollama manages the generation device on its own server.
+
 ## Use an OpenSSH cloud profile
 
 Copy `.env.example` to `.env` on first setup. Keep its Qdrant Cloud embedding model, dimensions, and prefixes together. Fill in `QDRANT_URL`, `QDRANT_API_KEY`, and `GROQ_API_KEY` for your environment, then set the following values for a separate OpenSSH run.
@@ -22,7 +35,6 @@ Relative paths resolve from the repository root in a checkout or editable instal
 | --- | --- | --- |
 | `DATA_DIR` | Keep raw, processed, curated, and reference data under `data/` | `/mnt/netvuln/data` |
 | `ARTIFACTS_DIR` | Keep evaluation inputs and results under `artifacts/` | `/mnt/netvuln/results` |
-| `EMBEDDING_DEVICE` | Leave blank or use `auto` to let Sentence Transformers choose the device | `cpu`, `cuda:0`, or `mps` when available |
 | `EMBEDDING_CACHE_DIR` | Use the model library's default cache | `/mnt/netvuln/model-cache` |
 | `EMBEDDING_BATCH_SIZE` | Use batches of 32 during indexing | `8` for a machine with less memory |
 

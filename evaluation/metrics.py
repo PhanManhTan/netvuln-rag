@@ -44,7 +44,8 @@ def score_record(record: dict[str, Any], all_cve_ids: set[str] | None) -> dict[s
     status_correct = not failed and status == record.get("expected_status")
     nonexistent = sorted(predicted - all_cve_ids) if all_cve_ids is not None else None
     unsupported = predicted - expected
-    retrieved = {str(item).upper() for item in record.get("retrieved_evidence_cves", [])}
+    evidence_cves = record.get("document_evidence_cves", record.get("retrieved_evidence_cves"))
+    retrieved = {str(item).upper() for item in evidence_cves or []}
     unsupported_by_evidence = predicted - retrieved if record.get("mode") == "rag" else set()
     expected_urls = {str(item).rstrip("/") for item in record.get("expected_source_urls", [])}
     citation_urls = set() if failed else _citation_urls(record)
@@ -63,6 +64,8 @@ def score_record(record: dict[str, Any], all_cve_ids: set[str] | None) -> dict[s
         "nonexistent_cves": nonexistent,
         "unsupported_cves": sorted(unsupported),
         "unsupported_by_retrieved_evidence": sorted(unsupported_by_evidence),
+        "evidence_cve_hits": len(expected & retrieved),
+        "evidence_cve_expected": len(expected) if evidence_cves is not None else 0,
         "citation_count": len(citation_urls),
         "valid_citation_count": len(valid_citations),
         "citation_required": bool(expected_urls),
@@ -85,6 +88,7 @@ def _summary(scored: list[dict[str, Any]], has_catalog: bool) -> dict[str, Any]:
     nonexistent_rate = _safe_ratio(nonexistent_count, predicted_count) if nonexistent_count is not None else None
     unsupported_count = sum(len(item["unsupported_cves"]) for item in scored)
     evidence_unsupported_count = sum(len(item["unsupported_by_retrieved_evidence"]) for item in scored)
+    evidence_expected = sum(item["evidence_cve_expected"] for item in scored)
     citation_count = sum(item["citation_count"] for item in scored)
     valid_citation_count = sum(item["valid_citation_count"] for item in scored)
     citation_required = [item for item in scored if item["citation_required"]]
@@ -115,6 +119,9 @@ def _summary(scored: list[dict[str, Any]], has_catalog: bool) -> dict[str, Any]:
         "unsupported_answer_level_rate": _safe_ratio(sum(bool(item["unsupported_cves"]) for item in scored), total),
         "retrieved_evidence_unsupported_cve_count": evidence_unsupported_count,
         "retrieved_evidence_unsupported_answer_rate": _safe_ratio(sum(bool(item["unsupported_by_retrieved_evidence"]) for item in scored), total),
+        "evidence_cve_recall": (
+            sum(item["evidence_cve_hits"] for item in scored) / evidence_expected if evidence_expected else None
+        ),
         "citation_precision": _safe_ratio(valid_citation_count, citation_count),
         "citation_coverage": _safe_ratio(sum(item["citation_covered"] for item in citation_required), len(citation_required)),
         "conflict_case_accuracy": _safe_ratio(sum(item["status_correct"] for item in conflict_cases), len(conflict_cases)),
@@ -146,7 +153,7 @@ def compare_summaries(baseline: dict[str, Any], rag: dict[str, Any]) -> dict[str
     metrics = (
         "cve_exact_match_accuracy", "status_accuracy", "cve_and_status_accuracy",
         "version_status_accuracy", "cve_precision", "cve_recall", "cve_f1",
-        "nonexistent_cve_level_rate", "unsupported_cve_level_rate", "citation_precision",
+        "evidence_cve_recall", "nonexistent_cve_level_rate", "unsupported_cve_level_rate", "citation_precision",
         "citation_coverage", "conflict_case_accuracy", "correct_abstention_rate", "average_latency_seconds",
     )
     differences: dict[str, float | None] = {}

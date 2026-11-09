@@ -39,19 +39,17 @@ cp .env.example .env
 
 Edit [config/products.json](config/products.json) to select products and versions. Set `DATA_DIR` and `ARTIFACTS_DIR` in `.env` to move the storage roots. Relative values are resolved from the repository root. Absolute values can point to mounted server volumes. See the [storage guide](data_pipeline/README.md#storage).
 
-Use `python -m pip install -r requirements-cloud.txt` for a cloud-only checkout. To run the CLI from another directory, install the checkout with `python -m pip install -e .`. The full `requirements.txt` also installs local embedding and test dependencies. [Path and device settings](config/README.md#move-local-data-or-change-compute)
+Use the same `requirements.txt` on laptops, servers, and Kaggle. Choose the service endpoints and embedding device in `.env` or set the equivalent environment variables. To run the CLI from another directory, install the checkout with `python -m pip install -e .`. [Service and device settings](config/README.md#choose-services-and-device)
 
 Run `python -m config.check --stage crawl` before preparing data. After preparation, use `--stage index`, `--stage chat`, or `--stage evaluate` to check the corresponding local prerequisites and configuration. [Configuration checks](config/README.md#check-the-resolved-settings)
 
-The example uses Gemini. Fill in `GEMINI_API_KEY` with a key from [Google AI Studio](https://aistudio.google.com/apikey). Change `GEMINI_MODEL` to select a different Gemini model.
+The laptop and Kaggle examples use Groq. Fill in `GROQ_API_KEY` and select a model with `GROQ_MODEL`.
 
 ```dotenv
-LLM_PROVIDER=gemini
-GEMINI_API_KEY=your_api_key
-GEMINI_MODEL=gemini-3.5-flash-lite
+LLM_PROVIDER=groq
+GROQ_API_KEY=your_api_key
+GROQ_MODEL=openai/gpt-oss-120b
 ```
-
-To use Groq, set `LLM_PROVIDER=groq`, fill in `GROQ_API_KEY`, and select a model with `GROQ_MODEL`. The example provides `openai/gpt-oss-120b`.
 
 For Qdrant Cloud, set `QDRANT_URL` to the HTTPS cluster endpoint and `QDRANT_API_KEY` to the cluster database key. The example uses Qdrant Cloud Inference with `intfloat/multilingual-e5-small` for both document and query embeddings. Enable Cloud Inference on the cluster if needed.
 
@@ -85,13 +83,27 @@ python -m evaluation.build
 python -m evaluation.run
 ```
 
-The builder writes candidate questions to `$ARTIFACTS_DIR/evaluation/questions.jsonl`. Review the questions, expected CVEs, and citations before benchmarking. The current runner compares LLM-only and RAG on the same questions. Index the corpus in Qdrant before evaluating semantic queries. See the [evaluation guide](evaluation/README.md).
+The builder writes candidate questions to `$ARTIFACTS_DIR/evaluation/questions.jsonl`. Review the questions, expected CVEs, and citations before benchmarking. Select one or more benchmark modes with `--modes`. Index the corpus in Qdrant before evaluating RAG semantic queries. [Benchmark modes and their inputs](evaluation/README.md#run-the-benchmark)
+
+## Run individual stages
+
+| Task | Command from the repository root | Read or edit |
+| --- | --- | --- |
+| Check settings | `python -m config.check --stage crawl` | [Settings](config/settings.py) and [configuration checks](config/check.py) |
+| Crawl NVD | `python -m data_pipeline.crawl --all-products` | [Crawler CLI](data_pipeline/crawl.py) and [NVD adapter](data_pipeline/nvd.py) |
+| Process an existing crawl | `python -m data_pipeline.process --all-products --run latest` | [Processing](data_pipeline/process.py) and [chunking](data_pipeline/chunker.py) |
+| Index an existing processed corpus | `python -m data_pipeline.index` | [Indexing](data_pipeline/index.py) |
+| Inspect retrieval or ask a question | `python -m uvicorn api.main:app` | [API](api/README.md), [retriever](rag/retrieval/retriever.py), and [prompts](rag/generation/prompts.json) |
+| Build benchmark questions | `python -m evaluation.build` | [Dataset builder](evaluation/build.py) |
+| Run a single benchmark mode | `python -m evaluation.run --modes llm_bm25` | [Runner](evaluation/run.py), [baseline evidence selection](evaluation/baselines.py), and [metrics](evaluation/metrics.py) |
 
 ## Run the OpenSSH pilot on Kaggle
 
-1. Open a Kaggle Notebook with Internet enabled and use the CPU runtime. Bring in the source from the branch or snapshot you want to test, then install `requirements-cloud.txt` from the repository root. Groq runs generation and Qdrant Cloud Inference runs embeddings. [Kaggle Notebook settings](https://www.kaggle.com/docs/notebooks)
+1. Open a Kaggle Notebook with Internet enabled and use the CPU runtime for the Groq and Qdrant Cloud example. Bring in the source from the branch or snapshot you want to test, then run `python -m pip install -r requirements.txt` from the repository root. [Kaggle Notebook settings](https://www.kaggle.com/docs/notebooks)
 2. Set up the [Kaggle configuration cell](config/README.md#kaggle-notebook) to load credentials from Kaggle Secrets and put data and results under `/kaggle/working`.
 3. Follow the [OpenSSH walkthrough](data_pipeline/README.md#openssh-example) for a fresh crawl or attach the saved pilot snapshot and use its matching collection and embedding settings. Keep the question file and processed manifest from the same NVD run.
 4. Check the inputs with `python -m config.check --stage evaluate --provider groq`, then run `python -m evaluation.run --provider groq --limit 5`. The benchmark paces Groq calls, retries transient errors, and saves each answer as it arrives. Use [Save & Run All](https://www.kaggle.com/docs/notebooks) to capture the notebook version and outputs under `/kaggle/working`.
+
+To try the raw and BM25 baselines alongside RAG, run `python -m evaluation.run --modes llm_raw llm_bm25 rag --limit 5`. Include the matching `raw/` directory if you attach a saved snapshot. Open `netvuln-results/evaluation/<timestamp>/summary.json` in the Kaggle version's Output tab. `llm_usage` lists token totals and request latency for each mode. [Metric definitions](evaluation/README.md#metrics)
 
 Run the offline test suite with `python -m pytest -q`.

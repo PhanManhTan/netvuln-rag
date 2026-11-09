@@ -53,16 +53,28 @@ class RAGChatbot:
         question: str,
         provider: str | None = None,
         top_k: int | None = None,
+        *,
+        max_context_chars: int | None = None,
     ) -> dict[str, Any]:
         bundle = self.retriever.search(question, top_k)
-        allowed_ids = {result.vulnerability_id.upper() for result in bundle.results}
-        metadata = {
+        context, sources = self.retriever.format_context(bundle, max_chars=max_context_chars)
+        response = self.answer_with_evidence(bundle.query.original, context, sources, provider)
+        return {
+            **response,
             "parsed_query": asdict(bundle.query),
             "matches": [asdict(match) for match in bundle.version_matches],
-            "retrieved_evidence_cves": sorted(allowed_ids),
         }
 
-        if not bundle.results:
+    def answer_with_evidence(
+        self,
+        question: str,
+        context: str,
+        sources: list[dict[str, str]],
+        provider: str | None = None,
+    ) -> dict[str, Any]:
+        allowed_ids = {source["vulnerability_id"].upper() for source in sources}
+        metadata = {"retrieved_evidence_cves": sorted(allowed_ids)}
+        if not sources:
             return {
                 "status": "insufficient_evidence",
                 "answer": (
@@ -73,11 +85,7 @@ class RAGChatbot:
                 "citations": [],
             }
 
-        context, sources = self.retriever.format_context(bundle)
-        user_prompt = self.prompts["rag_user_template"].format(
-            question=bundle.query.original,
-            context=context,
-        )
+        user_prompt = self.prompts["rag_user_template"].format(question=question, context=context)
         try:
             answer = self.llm.generate(
                 self.prompts["rag_system_prompt"],
