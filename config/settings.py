@@ -225,6 +225,10 @@ class Settings:
         return self.processed_data_dir / MANIFEST_FILENAME
 
     @property
+    def normalized_manifest(self) -> Path:
+        return self.processed_data_dir / "normalized-manifest.json"
+
+    @property
     def nvd_catalog_dir(self) -> Path:
         return self.reference_data_dir / "nvd"
 

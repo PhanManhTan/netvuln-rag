@@ -19,6 +19,8 @@ python -m evaluation.build
 
 Use `--product` to select a product and `--run` to pin its raw run. Use `--checks-per-version`, `--details-per-product`, and `--semantic-per-product` to cap candidate counts. The default output is `$ARTIFACTS_DIR/evaluation/questions.jsonl`. Use `--output` to choose another file.
 
+Use `--from-processed` to build questions from the product scope and raw run IDs of the published processed snapshot. The `data_pipeline.prepare --evaluate` command uses this option before running the benchmark.
+
 Check the expected CVEs, affected conditions, and citations against the original records. For natural-language descriptions, rewrite candidate CWE questions and verify the full set of matching CVEs. Select and freeze the reviewed dataset before benchmarking. See [questions.sample.jsonl](questions.sample.jsonl) for the JSONL format.
 
 ## Run the benchmark

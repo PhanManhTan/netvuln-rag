@@ -1,8 +1,10 @@
-"""Orchestrate crawl -> validate/process/chunk -> recreate vector index."""
+"""Run the data pipeline and optionally benchmark the resulting corpus."""
 
 from __future__ import annotations
 
 import argparse
+import subprocess
+import sys
 
 from config.products import get_product_catalog
 from config.settings import get_settings
@@ -31,9 +33,17 @@ def main() -> int:
     index = parser.add_mutually_exclusive_group()
     index.add_argument("--skip-index", action="store_true")
     index.add_argument("--recreate-index", action="store_true", help="Replace the existing Qdrant collection")
+    parser.add_argument("--evaluate", action="store_true", help="Build questions and compare raw, BM25, and RAG after indexing")
+    parser.add_argument("--eval-limit", type=_positive_int, help="Maximum questions to benchmark with --evaluate")
     args = parser.parse_args()
     if args.run != "latest" and not args.skip_crawl:
         parser.error("--run chỉ dùng được với --skip-crawl")
+    if args.eval_limit is not None and not args.evaluate:
+        parser.error("--eval-limit requires --evaluate")
+    if args.evaluate and args.skip_index:
+        parser.error("--evaluate requires indexing in this run")
+    if args.evaluate and args.limit is not None and not args.skip_crawl:
+        parser.error("--evaluate requires a complete crawl. Use --eval-limit to shorten the benchmark.")
     if not args.skip_index and not args.recreate_index:
         check_new_collection(settings)
 
@@ -61,7 +71,19 @@ def main() -> int:
         print(f"Indexed {count} chunks into {settings.qdrant_collection}")
     else:
         print("[index] skipped")
-    return 0
+
+    if not args.evaluate:
+        return 0
+
+    print("[evaluation] building questions from the published snapshot", flush=True)
+    build = subprocess.run([sys.executable, "-m", "evaluation.build", "--from-processed"], check=False)
+    if build.returncode:
+        return build.returncode
+    command = [sys.executable, "-m", "evaluation.run", "--modes", "llm_raw", "llm_bm25", "rag"]
+    if args.eval_limit is not None:
+        command.extend(["--limit", str(args.eval_limit)])
+    print("[evaluation] comparing raw, BM25, and RAG", flush=True)
+    return subprocess.run(command, check=False).returncode
 
 
 if __name__ == "__main__":

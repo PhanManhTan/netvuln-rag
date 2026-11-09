@@ -5,10 +5,11 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+from collections.abc import Callable, Iterable
 from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath, PureWindowsPath
-from tempfile import TemporaryDirectory
+from shutil import copyfile, rmtree
 from typing import Any
 from uuid import uuid4
 
@@ -33,9 +34,9 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def load_processed_manifest(settings: Settings) -> dict[str, Any]:
+def load_processed_manifest(settings: Settings, path: Path | None = None) -> dict[str, Any]:
     """Read a processed snapshot and translate paths from older machines."""
-    manifest = json.loads(settings.processed_manifest.read_text(encoding="utf-8"))
+    manifest = json.loads((path or settings.processed_manifest).read_text(encoding="utf-8"))
     for item in manifest["products"]:
         product_id = item["product_id"]
         for key, artifact in (
@@ -267,12 +268,18 @@ def _write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
             file.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
 
 
-def process_product(
+def _write_chunks(path: Path, records: Iterable[VulnerabilityRecord]) -> int:
+    chunks = [chunk.model_dump(mode="json") for record in records for chunk in create_chunks(record)]
+    chunks.sort(key=lambda item: item["chunk_id"])
+    _write_jsonl(path, chunks)
+    return len(chunks)
+
+
+def _normalize_product(
     profile: ProductProfile,
-    run: str = "latest",
-    settings: Settings | None = None,
-) -> dict[str, Any]:
-    selected = settings or get_settings()
+    run: str,
+    selected: Settings,
+) -> tuple[dict[str, Any], dict[str, VulnerabilityRecord]]:
     source_run = select_run(selected.raw_product_source_dir(profile.product_id), run)
     structured_path = selected.structured_file(profile.product_id)
     get_source_adapter(selected, profile).process(source_run, structured_path)
@@ -294,22 +301,72 @@ def process_product(
 
     normalized_records = [record.model_dump(mode="json") for record in sorted(records.values(), key=lambda item: item.vulnerability_id)]
     _write_jsonl(structured_path, normalized_records)
-    chunks = [chunk.model_dump(mode="json") for record in records.values() for chunk in create_chunks(record)]
-    chunks.sort(key=lambda item: item["chunk_id"])
-    chunks_path = selected.chunks_file(profile.product_id)
-    _write_jsonl(chunks_path, chunks)
     return {
         "product_id": profile.product_id,
         "input_runs": {selected.data_source: source_run.name, **({profile.vendor_source: vendor_run.name} if profile.vendor_source and vendor_run else {})},
         "record_count": len(records),
-        "chunk_count": len(chunks),
         "structured_path": structured_path.relative_to(selected.processed_data_dir).as_posix(),
         "structured_sha256": _sha256(structured_path),
-        "chunks_path": chunks_path.relative_to(selected.processed_data_dir).as_posix(),
-        "chunks_sha256": _sha256(chunks_path),
         "curated": curated_counts,
         "vendor_records_merged": vendor_merged,
+    }, records
+
+
+def _add_chunks(
+    settings: Settings, product: dict[str, Any], records: Iterable[VulnerabilityRecord],
+) -> dict[str, Any]:
+    path = settings.chunks_file(product["product_id"])
+    count = _write_chunks(path, records)
+    return {
+        **product,
+        "chunk_count": count,
+        "chunks_path": path.relative_to(settings.processed_data_dir).as_posix(),
+        "chunks_sha256": _sha256(path),
     }
+
+
+def process_product(
+    profile: ProductProfile, run: str = "latest", settings: Settings | None = None,
+) -> dict[str, Any]:
+    selected = settings or get_settings()
+    product, records = _normalize_product(profile, run, selected)
+    return _add_chunks(selected, product, records.values())
+
+
+def _publish_snapshot(
+    settings: Settings,
+    build: Callable[[Settings], list[dict[str, Any]]],
+    manifest_path: Path,
+) -> list[dict[str, Any]]:
+    """Stage all product artifacts before publishing the manifest that names them."""
+    snapshot = settings.processed_data_dir / "snapshots" / uuid4().hex
+    snapshot.mkdir(parents=True)
+    try:
+        results = build(replace(settings, processed_data_dir=snapshot))
+    except BaseException:
+        rmtree(snapshot, ignore_errors=True)
+        raise
+
+    prefix = snapshot.relative_to(settings.processed_data_dir)
+    for item in results:
+        for key in ("structured_path", "chunks_path"):
+            if key in item:
+                item[key] = (prefix / item[key]).as_posix()
+    manifest = {
+        "schema_version": "1.0",
+        "built_at": datetime.now(UTC).isoformat(),
+        "products": results,
+        "record_count": sum(item["record_count"] for item in results),
+        "chunk_count": sum(item.get("chunk_count", 0) for item in results),
+    }
+    temporary_manifest = settings.processed_data_dir / f".manifest-{snapshot.name}.tmp"
+    try:
+        with temporary_manifest.open("x", encoding="utf-8") as file:
+            json.dump(manifest, file, ensure_ascii=False, indent=2)
+        temporary_manifest.replace(manifest_path)
+    finally:
+        temporary_manifest.unlink(missing_ok=True)
+    return results
 
 
 def process_data(
@@ -318,42 +375,50 @@ def process_data(
     settings: Settings | None = None,
     *,
     nvd_runs: dict[str, str] | None = None,
+    normalize_only: bool = False,
 ) -> list[dict[str, Any]]:
     selected = settings or get_settings()
     catalog = get_product_catalog(selected.product_config_file)
     profiles = catalog.products if product_ids is None else tuple(catalog.by_id(item) for item in product_ids)
     runs = nvd_runs or {}
-    snapshots_dir = selected.processed_data_dir / "snapshots"
-    snapshots_dir.mkdir(parents=True, exist_ok=True)
-    snapshot = snapshots_dir / uuid4().hex
-    with TemporaryDirectory(prefix=".build-", dir=snapshots_dir) as temporary_dir:
-        staged = Path(temporary_dir)
-        staged_settings = replace(selected, processed_data_dir=staged)
-        results = [
-            process_product(profile, runs.get(profile.product_id, run), staged_settings)
-            for profile in profiles
-        ]
-        staged.rename(snapshot)
 
-    prefix = snapshot.relative_to(selected.processed_data_dir)
-    for item in results:
-        for key in ("structured_path", "chunks_path"):
-            item[key] = (prefix / item[key]).as_posix()
-    manifest = {
-        "schema_version": "1.0",
-        "built_at": datetime.now(UTC).isoformat(),
-        "products": results,
-        "record_count": sum(item["record_count"] for item in results),
-        "chunk_count": sum(item["chunk_count"] for item in results),
-    }
-    temporary_manifest = selected.processed_data_dir / f".manifest-{snapshot.name}.tmp"
-    try:
-        with temporary_manifest.open("x", encoding="utf-8") as file:
-            json.dump(manifest, file, ensure_ascii=False, indent=2)
-        temporary_manifest.replace(selected.processed_manifest)
-    finally:
-        temporary_manifest.unlink(missing_ok=True)
-    return results
+    def build(staged: Settings) -> list[dict[str, Any]]:
+        if normalize_only:
+            return [_normalize_product(profile, runs.get(profile.product_id, run), staged)[0] for profile in profiles]
+        return [process_product(profile, runs.get(profile.product_id, run), staged) for profile in profiles]
+
+    manifest = selected.normalized_manifest if normalize_only else selected.processed_manifest
+    return _publish_snapshot(selected, build, manifest)
+
+
+def rechunk_data(settings: Settings, *, from_normalized: bool = False) -> list[dict[str, Any]]:
+    """Regenerate chunks from the published structured files and preserve raw-run provenance."""
+    manifest = settings.normalized_manifest if from_normalized else settings.processed_manifest
+    products = load_processed_manifest(settings, manifest)["products"]
+    if not products:
+        raise ValueError("Processed manifest has no products. Run data_pipeline.process first.")
+    catalog = get_product_catalog(settings.product_config_file)
+
+    def build(staged: Settings) -> list[dict[str, Any]]:
+        results = []
+        for product in products:
+            product_id = catalog.by_id(product["product_id"]).product_id
+            source = resolve_processed_artifact(settings, product, "structured")
+            structured = staged.structured_file(product_id)
+            structured.parent.mkdir(parents=True, exist_ok=True)
+            copyfile(source, structured)
+            records = _load_records(structured)
+            row = {
+                **product,
+                "product_id": product_id,
+                "record_count": len(records),
+                "structured_path": structured.relative_to(staged.processed_data_dir).as_posix(),
+                "structured_sha256": _sha256(structured),
+            }
+            results.append(_add_chunks(staged, row, records.values()))
+        return results
+
+    return _publish_snapshot(settings, build, settings.processed_manifest)
 
 
 def main() -> int:
@@ -363,11 +428,27 @@ def main() -> int:
     products = parser.add_mutually_exclusive_group()
     products.add_argument("--product", choices=[item.product_id for item in catalog.products])
     products.add_argument("--all-products", action="store_true")
-    parser.add_argument("--run", default="latest", help="Run ID or 'latest'")
+    parser.add_argument("--run", help="Raw run ID (default: latest)")
+    stages = parser.add_mutually_exclusive_group()
+    stages.add_argument("--normalize-only", action="store_true", help="Write structured records and the normalized manifest")
+    stages.add_argument("--chunks-only", action="store_true", help="Create chunks from the normalized manifest")
+    stages.add_argument("--rechunk", action="store_true", help="Rebuild chunks for the current processed snapshot")
     args = parser.parse_args()
-    product_ids = None if args.all_products else [args.product or settings.default_product_id]
-    for result in process_data(product_ids, args.run, settings):
-        print(f"{result['product_id']}: {result['record_count']} records, {result['chunk_count']} chunks")
+    chunking_only = args.chunks_only or args.rechunk
+    if chunking_only and (args.product or args.all_products or args.run is not None):
+        parser.error("--chunks-only and --rechunk use the input manifest's product scope")
+    try:
+        if chunking_only:
+            results = rechunk_data(settings, from_normalized=args.chunks_only)
+        else:
+            product_ids = None if args.all_products else [args.product or settings.default_product_id]
+            run = args.run if args.run is not None else "latest"
+            results = process_data(product_ids, run, settings, normalize_only=args.normalize_only)
+    except (OSError, ValueError) as exc:
+        parser.error(str(exc))
+    for result in results:
+        chunks = f", {result['chunk_count']} chunks" if "chunk_count" in result else ""
+        print(f"{result['product_id']}: {result['record_count']} records{chunks}")
     return 0
 
 

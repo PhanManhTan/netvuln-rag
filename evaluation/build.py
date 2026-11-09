@@ -327,7 +327,9 @@ def main() -> int:
     catalog = get_product_catalog(settings.product_config_file)
     parser = argparse.ArgumentParser(description="Build evaluation draft from completed NVD crawls")
     parser.add_argument("--product", choices=[item.product_id for item in catalog.products])
-    parser.add_argument("--run", default="latest", help="NVD run ID (with --product), or latest per product")
+    runs = parser.add_mutually_exclusive_group()
+    runs.add_argument("--run", default="latest", help="NVD run ID (with --product), or latest per product")
+    runs.add_argument("--from-processed", action="store_true", help="Use the products and raw run IDs of the published snapshot")
     parser.add_argument("--checks-per-version", type=int, help="Cap positive CVE/version checks per version")
     parser.add_argument("--details-per-product", type=int, help="Cap CVE detail questions per product")
     parser.add_argument("--semantic-per-product", type=int, help="Cap CWE lookup questions per product")
@@ -346,6 +348,15 @@ def main() -> int:
             parser.error(f"{option} phải lớn hơn hoặc bằng 0")
 
     profiles = (catalog.by_id(args.product),) if args.product else catalog.products
+    processed_runs = {}
+    if args.from_processed:
+        processed_runs = {
+            row["product_id"]: row["input_runs"].get("nvd")
+            for row in load_processed_manifest(settings)["products"]
+        }
+        profiles = tuple(profile for profile in profiles if profile.product_id in processed_runs)
+        if not profiles:
+            parser.error("No selected products in the published snapshot")
     famous = load_famous_review_list(args.famous_list)
     rows: list[dict[str, Any]] = []
     versioned = [profile for profile in profiles if profile.versions]
@@ -353,7 +364,10 @@ def main() -> int:
         if len(versioned) != len(profiles):
             parser.error("Hãy dùng --product nếu catalog trộn crawl theo product và theo version")
         for profile in versioned:
-            run_dir = select_run(settings.raw_product_source_dir(profile.product_id, "nvd"), args.run)
+            run = processed_runs.get(profile.product_id) if args.from_processed else args.run
+            if not run or (args.from_processed and run == "latest"):
+                parser.error(f"The published snapshot has no pinned NVD run for {profile.product_id}")
+            run_dir = select_run(settings.raw_product_source_dir(profile.product_id, "nvd"), run)
             rows.extend(build_raw_questions(
                 NVDAdapter(settings, profile), run_dir, famous, args.checks_per_version,
                 details_per_product=args.details_per_product, semantic_per_product=args.semantic_per_product,

@@ -10,10 +10,10 @@ import requests
 
 from config.settings import Settings
 from config.products import ProductCatalog, ProductProfile, VersionTarget
+from data_pipeline import process as process_cli
 from data_pipeline.contracts import CrawlOptions
 from data_pipeline.crawl import crawl_product
 from data_pipeline.nvd import NVDAdapter
-from data_pipeline.process import process_data
 from rag.retrieval.models import MatchStatus
 from rag.retrieval.retriever import Retriever
 from evaluation import build as build_questions
@@ -218,7 +218,19 @@ def test_exact_cpe_crawl_drives_retrieval_and_evaluation(tmp_path: Path, monkeyp
     assert [call["params"]["cpeName"] for call in session.calls] == [first.cpe, first.cpe, second.cpe]
     assert [call["params"]["startIndex"] for call in session.calls] == [0, 1, 0]
     assert all("isVulnerable" in call["params"] for call in session.calls)
-    processed = process_data(settings=settings)[0]
+    monkeypatch.setattr(process_cli, "get_settings", lambda: settings)
+    monkeypatch.setattr("sys.argv", ["data_pipeline.process", "--normalize-only", "--all-products"])
+    assert process_cli.main() == 0
+    normalized, = process_cli.load_processed_manifest(settings, settings.normalized_manifest)["products"]
+    assert "chunks_path" not in normalized
+    assert not settings.processed_manifest.exists()
+
+    monkeypatch.setattr(process_cli, "get_settings", lambda: replace(settings, raw_data_dir=tmp_path / "missing-raw"))
+    monkeypatch.setattr("sys.argv", ["data_pipeline.process", "--chunks-only"])
+    assert process_cli.main() == 0
+    processed, = process_cli.load_processed_manifest(settings)["products"]
+    assert processed["input_runs"] == normalized["input_runs"]
+    assert processed["structured_sha256"] == normalized["structured_sha256"]
     assert processed["record_count"] == 2
     structured_path = Path(processed["structured_path"])
     chunks_path = Path(processed["chunks_path"])
@@ -237,6 +249,14 @@ def test_exact_cpe_crawl_drives_retrieval_and_evaluation(tmp_path: Path, monkeyp
     monkeypatch.setattr("sys.argv", ["build_questions"])
     assert build_questions.main() == 0
     rows = {row["id"]: row for row in load_questions(settings.evaluation_questions_file)}
+
+    newer_run = run_dir.with_name("99999999-newer-run")
+    newer_run.mkdir()
+    (newer_run / "manifest.json").write_text('{"status":"completed"}', encoding="utf-8")
+    monkeypatch.setattr("sys.argv", ["build_questions", "--from-processed"])
+    assert build_questions.main() == 0
+    assert {row["id"]: row for row in load_questions(settings.evaluation_questions_file)} == rows
+
     inventory = rows["demo-ssh-9.7p1-inventory"]
     assert inventory["expected_cves"] == [shared, first_only]
     assert inventory["raw_run_id"] == run_dir.name
@@ -256,6 +276,21 @@ def test_exact_cpe_crawl_drives_retrieval_and_evaluation(tmp_path: Path, monkeyp
     assert {result.vulnerability_id for result in bundle.results} == {shared, first_only}
     assert retriever.search(absent["question"]).version_matches[0].status == MatchStatus.UNKNOWN
     assert retriever.search("Demo SSH 9.7 có những CVE nào?").results == []
+
+    original_chunks = (settings.processed_data_dir / chunks_path).read_bytes()
+    create_chunks = process_cli.create_chunks
+    monkeypatch.setattr(process_cli, "create_chunks", lambda record: create_chunks(record)[:1])
+    monkeypatch.setattr(process_cli, "get_settings", lambda: replace(settings, raw_data_dir=tmp_path / "missing-raw"))
+    monkeypatch.setattr("sys.argv", ["data_pipeline.process", "--rechunk"])
+
+    assert process_cli.main() == 0
+    rebuilt, = process_cli.load_processed_manifest(settings)["products"]
+    assert rebuilt["input_runs"] == processed["input_runs"]
+    assert rebuilt["structured_sha256"] == processed["structured_sha256"]
+    assert rebuilt["chunk_count"] == 2 < processed["chunk_count"]
+    assert rebuilt["chunks_path"] != processed["chunks_path"]
+    assert (settings.processed_data_dir / chunks_path).read_bytes() == original_chunks
+    assert len(process_cli.resolve_processed_artifact(settings, rebuilt, "chunks").read_text(encoding="utf-8").splitlines()) == 2
 
 
 def test_evaluation_rejects_truncated_version_crawl(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

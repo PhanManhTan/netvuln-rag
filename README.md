@@ -59,13 +59,13 @@ For Qdrant Cloud, set `QDRANT_URL` to the HTTPS cluster endpoint and `QDRANT_API
 python -m data_pipeline.prepare --all-products --skip-index
 ```
 
-This crawls NVD and builds structured records and evidence chunks. Exact CVE lookup and version checks use the processed files. Semantic search also uses a Qdrant collection. Build it after configuring your cluster.
+This crawls NVD and writes structured records and evidence chunks to the processed snapshot. Exact CVE lookup and version checks use those files. To enable semantic search, embed the chunks and upsert their vectors and source metadata into the Qdrant collection configured in `.env`.
 
 ```bash
 python -m data_pipeline.index
 ```
 
-Use a fresh collection for a new corpus or when changing embedding models. The explicit `--recreate` option drops and rebuilds the configured collection. With `EMBEDDING_PROVIDER=qdrant_cloud`, Qdrant generates vectors from the text sent by the app. See the [data pipeline guide](data_pipeline/README.md) for the individual commands and manifest layout.
+Use a fresh collection for a new corpus or when changing embedding models. The explicit `--recreate` option drops and rebuilds the configured collection. To change chunking, edit `data_pipeline/chunker.py` and run `python -m data_pipeline.process --rechunk` before indexing. To change only the embedding model, reuse the existing chunks and run `index` with the new model and collection. [Rebuild steps and file layout](data_pipeline/README.md#what-to-rerun)
 
 ## 3. Ask a question
 
@@ -91,11 +91,16 @@ The builder writes candidate questions to `$ARTIFACTS_DIR/evaluation/questions.j
 | --- | --- | --- |
 | Check settings | `python -m config.check --stage crawl` | [Settings](config/settings.py) and [configuration checks](config/check.py) |
 | Crawl NVD | `python -m data_pipeline.crawl --all-products` | [Crawler CLI](data_pipeline/crawl.py) and [NVD adapter](data_pipeline/nvd.py) |
-| Process an existing crawl | `python -m data_pipeline.process --all-products --run latest` | [Processing](data_pipeline/process.py) and [chunking](data_pipeline/chunker.py) |
-| Index an existing processed corpus | `python -m data_pipeline.index` | [Indexing](data_pipeline/index.py) |
+| Normalize an existing crawl | `python -m data_pipeline.process --all-products --normalize-only` | [Processing](data_pipeline/process.py) |
+| Create chunks from that normalized output | `python -m data_pipeline.process --chunks-only` | [Chunking](data_pipeline/chunker.py) |
+| Rebuild chunks from the published structured records | `python -m data_pipeline.process --rechunk` | [Chunking](data_pipeline/chunker.py) |
+| Prepare local vectors or Cloud Inference inputs | `python -m data_pipeline.index --stage prepare` | [Index input preparation](data_pipeline/index.py) |
+| Push the saved input and metadata to Qdrant | `python -m data_pipeline.index --stage push` | [Qdrant upsert](data_pipeline/index.py) |
 | Inspect retrieval or ask a question | `python -m uvicorn api.main:app` | [API](api/README.md), [retriever](rag/retrieval/retriever.py), and [prompts](rag/generation/prompts.json) |
 | Build benchmark questions | `python -m evaluation.build` | [Dataset builder](evaluation/build.py) |
 | Run a single benchmark mode | `python -m evaluation.run --modes llm_bm25` | [Runner](evaluation/run.py), [baseline evidence selection](evaluation/baselines.py), and [metrics](evaluation/metrics.py) |
+
+Run `python -m data_pipeline.prepare --all-products` from crawl through Qdrant upload. Add `--evaluate` to build questions and benchmark the same snapshot. [Full pipeline commands](data_pipeline/README.md#run-all-stages-in-order)
 
 ## Run the OpenSSH pilot on Kaggle
 
@@ -104,6 +109,6 @@ The builder writes candidate questions to `$ARTIFACTS_DIR/evaluation/questions.j
 3. Follow the [OpenSSH walkthrough](data_pipeline/README.md#openssh-example) for a fresh crawl or attach the saved pilot snapshot and use its matching collection and embedding settings. Keep the question file and processed manifest from the same NVD run.
 4. Check the inputs with `python -m config.check --stage evaluate --provider groq`, then run `python -m evaluation.run --provider groq --limit 5`. The benchmark paces Groq calls, retries transient errors, and saves each answer as it arrives. Use [Save & Run All](https://www.kaggle.com/docs/notebooks) to capture the notebook version and outputs under `/kaggle/working`.
 
-To try the raw and BM25 baselines alongside RAG, run `python -m evaluation.run --modes llm_raw llm_bm25 rag --limit 5`. Include the matching `raw/` directory if you attach a saved snapshot. Open `netvuln-results/evaluation/<timestamp>/summary.json` in the Kaggle version's Output tab. `llm_usage` lists token totals and request latency for each mode. [Metric definitions](evaluation/README.md#metrics)
+For a fresh run from crawl through benchmark, use `python -m data_pipeline.prepare --all-products --evaluate --eval-limit 5`. This compares the raw and BM25 baselines with RAG. To benchmark a saved snapshot, include its matching `raw/` directory and use the separate evaluation commands. Open `netvuln-results/evaluation/<timestamp>/summary.json` in the Kaggle version's Output tab. [Metric definitions](evaluation/README.md#metrics)
 
 Run the offline test suite with `python -m pytest -q`.

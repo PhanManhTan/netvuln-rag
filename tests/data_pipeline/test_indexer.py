@@ -1,4 +1,5 @@
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -71,6 +72,26 @@ def test_indexer_uses_prebuilt_source_attributed_chunks(tmp_path: Path, monkeypa
         )
     else:
         assert client.points[0].vector == [1.0, 0.0]
+
+    bundle = tmp_path / "index-input.json"
+    monkeypatch.setattr(indexer, "get_settings", lambda: settings)
+    monkeypatch.setattr(indexer, "_connect", lambda _: pytest.fail("Preparing input must not open Qdrant"))
+    monkeypatch.setattr("sys.argv", ["data_pipeline.index", "--stage", "prepare", "--input", str(path), "--bundle", str(bundle)])
+    assert indexer.main() == 0
+
+    prepared = indexer.IndexInput.model_validate_json(bundle.read_text(encoding="utf-8"))
+    with pytest.raises(ValueError, match="EMBEDDING_MODEL"):
+        indexer.push_index_input(prepared, replace(settings, embedding_model="another-model"))
+
+    uploaded = FakeClient()
+    monkeypatch.setattr(indexer, "_connect", lambda _: uploaded)
+    monkeypatch.setattr(indexer, "_encode_local", lambda *args: pytest.fail("Push must reuse the saved input"))
+    monkeypatch.setattr(indexer, "prepare_index_input", lambda *args: pytest.fail("Push must not read chunks"))
+    monkeypatch.setattr("sys.argv", ["data_pipeline.index", "--stage", "push", "--bundle", str(bundle)])
+    assert indexer.main() == 0
+    assert [point.model_dump(mode="json") for point in uploaded.points] == [
+        point.model_dump(mode="json") for point in client.points
+    ]
 
 
 def test_implicit_prepare_refuses_existing_collection(monkeypatch) -> None:

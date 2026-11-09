@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import argparse
 import uuid
+from math import isfinite
 from pathlib import Path
-from typing import Any, Iterable
+from tempfile import NamedTemporaryFile
+from typing import Any, Iterable, Literal
 
+from pydantic import BaseModel, Field, model_validator
 from qdrant_client import QdrantClient, models
 
 from config.settings import Settings, get_settings
@@ -15,6 +18,33 @@ from data_pipeline.schemas import TextChunk
 
 
 POINT_NAMESPACE = uuid.UUID("9cf154ef-4f68-48be-9125-b7ab813663c5")
+
+
+class IndexInput(BaseModel):
+    """Portable points and the embedding settings needed to upload them."""
+
+    schema_version: Literal[1] = 1
+    embedding_provider: Literal["local", "qdrant_cloud"]
+    embedding_model: str
+    embedding_document_prefix: str
+    embedding_query_prefix: str
+    vector_size: int = Field(gt=0)
+    points: list[models.PointStruct] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_vectors(self) -> "IndexInput":
+        for point in self.points:
+            vector = point.vector
+            if self.embedding_provider == "qdrant_cloud":
+                if not isinstance(vector, models.Document) or vector.model != self.embedding_model:
+                    raise ValueError(f"Point {point.id} needs text for model {self.embedding_model}")
+            elif (
+                not isinstance(vector, list)
+                or len(vector) != self.vector_size
+                or not all(isinstance(value, float) and isfinite(value) for value in vector)
+            ):
+                raise ValueError(f"Point {point.id} needs a finite dense vector of size {self.vector_size}")
+        return self
 
 
 def _read_chunks(files: Iterable[Path]) -> Iterable[TextChunk]:
@@ -124,14 +154,12 @@ def _encode_local(chunk_texts: list[str], settings: Settings) -> tuple[list[list
     return [vector.tolist() for vector in vectors], vector_size
 
 
-def build_index(
+def prepare_index_input(
     input_path: Path,
     settings: Settings,
-    recreate: bool = False,
     *,
     product_ids: set[str] | None = None,
-    require_new_collection: bool = False,
-) -> int:
+) -> IndexInput:
     if input_path.resolve() == settings.chunks_data_dir.resolve():
         files = processed_snapshot_paths(settings)["chunks"]
         chunk_rows = list(_read_chunks(
@@ -158,9 +186,6 @@ def build_index(
     else:
         vectors, vector_size = _encode_local(chunk_texts, settings)
 
-    client = _connect(settings)
-    _prepare_collection(client, settings, vector_size, recreate, require_new_collection)
-
     points: list[models.PointStruct] = []
     for row, vector in zip(chunk_rows, vectors, strict=True):
         points.append(
@@ -170,25 +195,99 @@ def build_index(
                 payload={**row.model_dump(mode="json"), "embedding_model": settings.embedding_model},
             )
         )
+    return IndexInput(
+        embedding_provider=settings.embedding_provider,
+        embedding_model=settings.embedding_model,
+        embedding_document_prefix=settings.embedding_document_prefix,
+        embedding_query_prefix=settings.embedding_query_prefix,
+        vector_size=vector_size,
+        points=points,
+    )
+
+
+def push_index_input(
+    prepared: IndexInput,
+    settings: Settings,
+    recreate: bool = False,
+    *,
+    require_new_collection: bool = False,
+) -> int:
+    for name in ("embedding_provider", "embedding_model", "embedding_document_prefix", "embedding_query_prefix"):
+        if getattr(prepared, name) != getattr(settings, name):
+            raise ValueError(f"Prepared index input does not match {name.upper()}. Prepare it again with the current settings.")
+    cloud = prepared.embedding_provider == "qdrant_cloud"
+    if cloud and prepared.vector_size != settings.embedding_dimensions:
+        raise ValueError("Prepared index input does not match EMBEDDING_DIMENSIONS")
+
+    client = _connect(settings)
+    _prepare_collection(client, settings, prepared.vector_size, recreate, require_new_collection)
 
     batch_size = settings.embedding_batch_size if cloud else 128
-    for start in range(0, len(points), batch_size):
+    for start in range(0, len(prepared.points), batch_size):
         client.upsert(
             collection_name=settings.qdrant_collection,
-            points=points[start : start + batch_size],
+            points=prepared.points[start : start + batch_size],
             wait=True,
         )
-    return len(points)
+    return len(prepared.points)
+
+
+def build_index(
+    input_path: Path,
+    settings: Settings,
+    recreate: bool = False,
+    *,
+    product_ids: set[str] | None = None,
+    require_new_collection: bool = False,
+) -> int:
+    prepared = prepare_index_input(input_path, settings, product_ids=product_ids)
+    return push_index_input(prepared, settings, recreate, require_new_collection=require_new_collection)
+
+
+def _write_index_input(path: Path, prepared: IndexInput) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = None
+    try:
+        with NamedTemporaryFile(dir=path.parent, mode="w", encoding="utf-8", delete=False) as file:
+            temporary = Path(file.name)
+            file.write(prepared.model_dump_json())
+        temporary.replace(path)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
 
 
 def main() -> int:
     settings = get_settings()
-    parser = argparse.ArgumentParser(description="Embed and index normalized records")
-    parser.add_argument("--input", type=Path, default=settings.chunks_data_dir)
+    parser = argparse.ArgumentParser(description="Embed chunks and upsert vectors and source metadata into Qdrant")
+    parser.add_argument("--stage", choices=("all", "prepare", "push"), default="all")
+    parser.add_argument("--input", type=Path, help="Chunk file or directory for all or prepare")
+    parser.add_argument("--bundle", type=Path, help="Input/output file for prepare or push (default: ARTIFACTS_DIR/index/points.json)")
     parser.add_argument("--recreate", action="store_true")
     args = parser.parse_args()
-    count = build_index(args.input, settings, recreate=args.recreate)
-    print(f"Indexed {count} chunks into: {settings.qdrant_collection}")
+    if args.stage == "prepare" and args.recreate:
+        parser.error("--recreate applies to an upload")
+    if args.stage == "push" and args.input is not None:
+        parser.error("Use --bundle to select the prepared input for push")
+    if args.stage == "all" and args.bundle is not None:
+        parser.error("--bundle applies to prepare or push")
+    bundle = args.bundle or settings.artifacts_dir / "index" / "points.json"
+    input_path = args.input or settings.chunks_data_dir
+    try:
+        if args.stage == "prepare":
+            prepared = prepare_index_input(input_path, settings)
+            _write_index_input(bundle, prepared)
+            kind = "Cloud Inference text" if prepared.embedding_provider == "qdrant_cloud" else "local vectors"
+            print(f"Prepared {len(prepared.points)} points ({kind}) in {bundle}")
+            return 0
+        if args.stage == "push":
+            prepared = IndexInput.model_validate_json(bundle.read_text(encoding="utf-8"))
+            count = push_index_input(prepared, settings, recreate=args.recreate)
+        else:
+            count = build_index(input_path, settings, recreate=args.recreate)
+    except (OSError, ValueError) as exc:
+        parser.error(str(exc))
+    print(f"Upserted {count} vectors into Qdrant collection {settings.qdrant_collection}")
     return 0
 
 

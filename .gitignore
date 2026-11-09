@@ -17,6 +17,7 @@ data/reference/nvd/all_cve_ids.txt
 data/reference/nvd/manifest.json
 qdrant_storage/
 artifacts/evaluation/
+artifacts/index/
 
 .idea/
 .vscode/
