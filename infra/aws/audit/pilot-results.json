@@ -1,0 +1,202 @@
+{
+  "schema_version": 1,
+  "scope": "one_live_case_two_integration_runs_not_formal_benchmark",
+  "whole_answer_accuracy": null,
+  "runs": [
+    {
+      "run_id": "20261114T175240.310427Z",
+      "schema_version": 1,
+      "scope": "one_question_one_live_device_diagnostic_not_full_benchmark",
+      "gold_review_status": "draft_source_backed_not_human_approved",
+      "question_count": 1,
+      "provider": "groq",
+      "model": "openai/gpt-oss-120b",
+      "collector_complete": true,
+      "snapshot_id": "6e63d69a5702d9344a3adc10c12d73acc0e5c3e0a1576e26d02bafcdc7cb899c",
+      "expected": {
+        "device_id": "OPENSSH-A",
+        "product_id": "openssh",
+        "version": "9.6p1",
+        "cve": "CVE-2024-6387",
+        "verdict": "affected",
+        "review_status": "draft_source_backed_not_human_approved",
+        "basis": "Official upstream affected interval plus locked unpatched source, running root sshd, glibc and nonzero LoginGraceTime",
+        "source_urls": [
+          "https://cveawg.mitre.org/api/cve/CVE-2024-6387",
+          "https://www.openssh.org/txt/release-9.8",
+          "https://nvd.nist.gov/vuln/detail/CVE-2024-6387"
+        ],
+        "limitation": "Affected software classification only; exploitation was not tested or established on this host."
+      },
+      "source_hashes": {
+        "cve_record": "8d6784bc3f8c65405d487f61a428195f4203774def9f0864b7004a776492dcdf",
+        "upstream_release": "88033a755cd66705c50106b5caa4f030915ffe57a921b28fd07cbcca6004cdfa"
+      },
+      "corpus_manifest_sha256": "647bfd716e60f06abb7ec7ef5d68d0890ee9b845b2cf58569b1e745c25182ba8",
+      "results": [
+        {
+          "mode": "llm_only",
+          "scored_status": "affected",
+          "predicted_cves": [
+            "CVE-2024-6387"
+          ],
+          "cve_and_status_correct": true,
+          "true_positive": 1,
+          "false_positive": 0,
+          "false_negative": 0,
+          "citation_count": 0,
+          "citation_covered": false,
+          "latency_seconds": 1.4307958410008723,
+          "error": null,
+          "output_error": null
+        },
+        {
+          "mode": "rag",
+          "scored_status": "affected",
+          "predicted_cves": [
+            "CVE-2024-6387"
+          ],
+          "cve_and_status_correct": true,
+          "true_positive": 1,
+          "false_positive": 0,
+          "false_negative": 0,
+          "citation_count": 1,
+          "citation_covered": true,
+          "latency_seconds": 5.542934114000673,
+          "error": null,
+          "output_error": null
+        }
+      ],
+      "limitations": [
+        "One positive case cannot estimate model accuracy or recall across the proposal.",
+        "Citation URL overlap is automatic; source-support/wording review remains pending.",
+        "CVE existence/hallucination rate is not estimated from a one-CVE catalog.",
+        "No Greenbone scan or exploit attempt was performed."
+      ],
+      "diagnostics": {
+        "schema_version": 1,
+        "source": "official-cve.json and upstream-release-9.8.txt pinned before generation",
+        "raw_results_modified": false,
+        "whole_answer_accuracy": null,
+        "results": {
+          "llm_only": {
+            "tuple_match": true,
+            "unsupported_recommendation_versions": [],
+            "unbounded_range_conflicts": [
+              {
+                "claimed_lower": "9.0p1",
+                "claimed_upper": null,
+                "official_lower": "8.5p1",
+                "official_upper": "9.7p1"
+              }
+            ],
+            "scope": "heuristic_diagnostics_not_complete_semantic_scoring"
+          },
+          "rag": {
+            "tuple_match": true,
+            "unsupported_recommendation_versions": [
+              "9.6p2"
+            ],
+            "unbounded_range_conflicts": [],
+            "scope": "heuristic_diagnostics_not_complete_semantic_scoring"
+          }
+        },
+        "interpretation": "CVE/verdict agreement is narrower than whole-answer factual correctness. Flags require source audit and are not a formal reviewed metric."
+      }
+    },
+    {
+      "run_id": "ansible-20261114",
+      "schema_version": 1,
+      "scope": "one_question_one_live_device_diagnostic_not_full_benchmark",
+      "gold_review_status": "draft_source_backed_not_human_approved",
+      "question_count": 1,
+      "provider": "groq",
+      "model": "openai/gpt-oss-120b",
+      "collector_complete": true,
+      "snapshot_id": "8b0bbc3bd53a4a7200bfb388bb0b17c36791c5b4b4001da1dcbfae552e51f74e",
+      "expected": {
+        "device_id": "OPENSSH-A",
+        "product_id": "openssh",
+        "version": "9.6p1",
+        "cve": "CVE-2024-6387",
+        "verdict": "affected",
+        "review_status": "draft_source_backed_not_human_approved",
+        "basis": "Official upstream affected interval plus locked unpatched source, running root sshd, glibc and nonzero LoginGraceTime",
+        "source_urls": [
+          "https://cveawg.mitre.org/api/cve/CVE-2024-6387",
+          "https://www.openssh.org/txt/release-9.8",
+          "https://nvd.nist.gov/vuln/detail/CVE-2024-6387"
+        ],
+        "limitation": "Affected software classification only; exploitation was not tested or established on this host."
+      },
+      "collection_transport": "ansible_local",
+      "source_hashes": {
+        "cve_record": "8d6784bc3f8c65405d487f61a428195f4203774def9f0864b7004a776492dcdf",
+        "upstream_release": "88033a755cd66705c50106b5caa4f030915ffe57a921b28fd07cbcca6004cdfa"
+      },
+      "corpus_manifest_sha256": "647bfd716e60f06abb7ec7ef5d68d0890ee9b845b2cf58569b1e745c25182ba8",
+      "whole_answer_accuracy": null,
+      "results": [
+        {
+          "mode": "llm_only",
+          "scored_status": "affected",
+          "predicted_cves": [
+            "CVE-2024-6387"
+          ],
+          "cve_and_status_correct": true,
+          "true_positive": 1,
+          "false_positive": 0,
+          "false_negative": 0,
+          "citation_count": 0,
+          "citation_covered": false,
+          "latency_seconds": 2.050428649999958,
+          "error": null,
+          "output_error": null
+        },
+        {
+          "mode": "rag",
+          "scored_status": "affected",
+          "predicted_cves": [
+            "CVE-2024-6387"
+          ],
+          "cve_and_status_correct": true,
+          "true_positive": 1,
+          "false_positive": 0,
+          "false_negative": 0,
+          "citation_count": 1,
+          "citation_covered": true,
+          "latency_seconds": 15.398912254000606,
+          "error": null,
+          "output_error": null
+        }
+      ],
+      "limitations": [
+        "One positive case cannot estimate model accuracy or recall across the proposal.",
+        "Citation URL overlap is automatic; source-support/wording review remains pending.",
+        "CVE existence/hallucination rate is not estimated from a one-CVE catalog.",
+        "No Greenbone scan or exploit attempt was performed."
+      ],
+      "diagnostics": {
+        "schema_version": 1,
+        "source": "official-cve.json and upstream-release-9.8.txt pinned before generation",
+        "raw_results_modified": false,
+        "whole_answer_accuracy": null,
+        "results": {
+          "llm_only": {
+            "tuple_match": true,
+            "unsupported_recommendation_versions": [],
+            "unbounded_range_conflicts": [],
+            "scope": "heuristic_diagnostics_not_complete_semantic_scoring"
+          },
+          "rag": {
+            "tuple_match": true,
+            "unsupported_recommendation_versions": [],
+            "unbounded_range_conflicts": [],
+            "scope": "heuristic_diagnostics_not_complete_semantic_scoring"
+          }
+        },
+        "interpretation": "CVE/verdict agreement is narrower than whole-answer factual correctness. Flags require source audit and are not a formal reviewed metric."
+      }
+    }
+  ]
+}

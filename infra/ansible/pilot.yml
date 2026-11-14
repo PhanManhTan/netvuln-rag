@@ -1,0 +1,57 @@
+---
+- name: Verify one installed OpenSSH and pull facts without an agent
+  hosts: localhost
+  connection: local
+  gather_facts: true
+  vars:
+    ansible_python_interpreter: /usr/bin/python3
+    netvuln_repo: "{{ playbook_dir }}/../.."
+    netvuln_pilot_output: "{{ netvuln_repo }}/artifacts/aws/ansible-pilot"
+    netvuln_pilot_prefix: /tmp/netvuln-openssh-pilot/products/openssh/9.6p1
+  tasks:
+    - name: Create the local audit directory
+      ansible.builtin.file:
+        path: "{{ netvuln_pilot_output }}"
+        state: directory
+        mode: '0700'
+
+    - name: Read the actual installed binary version
+      ansible.builtin.command:
+        argv: ["{{ netvuln_pilot_prefix }}/sbin/sshd", -V]
+      register: netvuln_version
+      changed_when: false
+
+    - name: Require the selected pilot version
+      ansible.builtin.assert:
+        that: "'OpenSSH_9.6p1' in netvuln_version.stderr"
+        fail_msg: Install the locked 9.6p1 pilot before collecting facts.
+
+    - name: Gather distribution package facts through Ansible
+      ansible.builtin.package_facts:
+        manager: apt
+
+    - name: Define the one-shot process probe
+      ansible.builtin.copy:
+        content: "{{ {'target': {'device_id': 'OPENSSH-A', 'product_id': 'openssh', 'version': '9.6p1'}, 'prefix': netvuln_pilot_prefix, 'management_ip': '127.0.0.1', 'pid_file': '/tmp/netvuln-openssh-pilot/service/sshd.pid', 'configuration_file': '/tmp/netvuln-openssh-pilot/service/sshd_config', 'network_scope': 'loopback_pilot', 'listener_port': 22222, 'collection_transport': 'ansible_local'} | to_nice_json }}\n"
+        dest: "{{ netvuln_pilot_output }}/facts-config.json"
+        mode: '0600'
+
+    - name: Observe the running root sshd and effective configuration
+      ansible.builtin.command:
+        argv: [python3, -m, collector.facts, --config, "{{ netvuln_pilot_output }}/facts-config.json"]
+        chdir: "{{ netvuln_repo }}"
+      become: true
+      register: netvuln_pilot_snapshot
+      changed_when: false
+
+    - name: Save the fresh observed snapshot
+      ansible.builtin.copy:
+        content: "{{ netvuln_pilot_snapshot.stdout | from_json | to_nice_json }}\n"
+        dest: "{{ netvuln_pilot_output }}/snapshot.json"
+        mode: '0600'
+
+    - name: Record the Ansible host and package facts
+      ansible.builtin.copy:
+        content: "{{ {'distribution': ansible_facts.distribution, 'release': ansible_facts.distribution_version, 'packages': ansible_facts.packages, 'connection': 'local'} | to_nice_json }}\n"
+        dest: "{{ netvuln_pilot_output }}/ansible-facts.json"
+        mode: '0600'

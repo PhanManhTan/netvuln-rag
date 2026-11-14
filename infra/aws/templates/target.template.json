@@ -1,0 +1,386 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "NetVuln target: prepare the Ansible control node or SSH target, then signal base readiness",
+  "Parameters": {
+    "ArtifactsBucket": {
+      "Type": "String",
+      "AllowedPattern": "[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]"
+    },
+    "ArtifactsPrefix": {
+      "Type": "String",
+      "AllowedPattern": "[a-zA-Z0-9][a-zA-Z0-9/_-]*"
+    },
+    "BundleSha256": {
+      "Type": "String",
+      "AllowedPattern": "[a-f0-9]{64}"
+    },
+    "AmiId": {
+      "Type": "AWS::EC2::Image::Id"
+    },
+    "InstanceType": {
+      "Type": "String",
+      "Default": "t3.medium",
+      "AllowedValues": [
+        "t3.small",
+        "t3.medium",
+        "t3.large",
+        "t3.xlarge",
+        "m6i.large",
+        "m6i.xlarge"
+      ]
+    },
+    "SubnetId": {
+      "Type": "AWS::EC2::Subnet::Id"
+    },
+    "SecurityGroupId": {
+      "Type": "AWS::EC2::SecurityGroup::Id"
+    },
+    "FleetId": {
+      "Type": "String",
+      "AllowedPattern": "[a-zA-Z][a-zA-Z0-9-]{0,99}"
+    },
+    "DeviceId": {
+      "Type": "String",
+      "AllowedValues": [
+        "FRR-A",
+        "FRR-B",
+        "NGINX-A",
+        "NGINX-B",
+        "APACHE-A",
+        "APACHE-B",
+        "BIND-A",
+        "BIND-B",
+        "OPENVPN-A",
+        "OPENVPN-B",
+        "OPENSSH-A",
+        "OPENSSH-B",
+        "HAPROXY-A",
+        "HAPROXY-B",
+        "DNSMASQ-A",
+        "DNSMASQ-B"
+      ]
+    },
+    "DeviceKey": {
+      "Type": "String",
+      "AllowedValues": [
+        "FRRA",
+        "FRRB",
+        "NGINXA",
+        "NGINXB",
+        "APACHEA",
+        "APACHEB",
+        "BINDA",
+        "BINDB",
+        "OPENVPNA",
+        "OPENVPNB",
+        "OPENSSHA",
+        "OPENSSHB",
+        "HAPROXYA",
+        "HAPROXYB",
+        "DNSMASQA",
+        "DNSMASQB"
+      ]
+    }
+  },
+  "Resources": {
+    "Role": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "ec2.amazonaws.com"
+                ]
+              },
+              "Action": [
+                "sts:AssumeRole"
+              ]
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          {
+            "Fn::Sub": "arn:${AWS::Partition}:iam::aws:policy/AmazonSSMManagedInstanceCore"
+          }
+        ],
+        "Policies": [
+          {
+            "PolicyName": "ExperimentBootstrap",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:s3:::${ArtifactsBucket}/${ArtifactsPrefix}/bundle.tar.gz"
+                    },
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:s3:::${ArtifactsBucket}/${ArtifactsPrefix}/ssh-known-hosts"
+                    },
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:s3:::${ArtifactsBucket}/${ArtifactsPrefix}/pki/${DeviceId}.tar.gz"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "cloudformation:SignalResource"
+                  ],
+                  "Resource": {
+                    "Ref": "AWS::StackId"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "Profile": {
+      "Type": "AWS::IAM::InstanceProfile",
+      "Properties": {
+        "Roles": [
+          {
+            "Ref": "Role"
+          }
+        ]
+      }
+    },
+    "Node": {
+      "Type": "AWS::EC2::Instance",
+      "Properties": {
+        "ImageId": {
+          "Ref": "AmiId"
+        },
+        "InstanceType": {
+          "Ref": "InstanceType"
+        },
+        "IamInstanceProfile": {
+          "Ref": "Profile"
+        },
+        "SubnetId": {
+          "Ref": "SubnetId"
+        },
+        "SecurityGroupIds": [
+          {
+            "Ref": "SecurityGroupId"
+          }
+        ],
+        "PrivateIpAddress": {
+          "Fn::FindInMap": [
+            "Targets",
+            {
+              "Ref": "DeviceKey"
+            },
+            "Ip"
+          ]
+        },
+        "SourceDestCheck": {
+          "Fn::If": [
+            "IsRouter",
+            false,
+            true
+          ]
+        },
+        "MetadataOptions": {
+          "HttpTokens": "required",
+          "HttpEndpoint": "enabled"
+        },
+        "BlockDeviceMappings": [
+          {
+            "DeviceName": "/dev/sda1",
+            "Ebs": {
+              "VolumeSize": 30,
+              "VolumeType": "gp3",
+              "Encrypted": true,
+              "DeleteOnTermination": true
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "NetVulnFleet",
+            "Value": {
+              "Ref": "FleetId"
+            }
+          },
+          {
+            "Key": "NetVulnRole",
+            "Value": "target"
+          },
+          {
+            "Key": "Name",
+            "Value": {
+              "Ref": "DeviceId"
+            }
+          },
+          {
+            "Key": "NetVulnDevice",
+            "Value": {
+              "Ref": "DeviceId"
+            }
+          },
+          {
+            "Key": "NetVulnProduct",
+            "Value": {
+              "Fn::FindInMap": [
+                "Targets",
+                {
+                  "Ref": "DeviceKey"
+                },
+                "Product"
+              ]
+            }
+          },
+          {
+            "Key": "NetVulnVersion",
+            "Value": {
+              "Fn::FindInMap": [
+                "Targets",
+                {
+                  "Ref": "DeviceKey"
+                },
+                "Version"
+              ]
+            }
+          }
+        ],
+        "UserData": {
+          "Fn::Base64": {
+            "Fn::Sub": "#!/bin/bash\nset -euo pipefail\numask 077\nexport DEBIAN_FRONTEND=noninteractive\nexport AWS_DEFAULT_REGION='${AWS::Region}'\nsignal_result() {\n  result=$?\n  trap - EXIT\n  if command -v aws >/dev/null; then\n    status=FAILURE\n    if [ \"$result\" -eq 0 ]; then status=SUCCESS; fi\n    aws cloudformation signal-resource --stack-name '${AWS::StackName}' --logical-resource-id Node --status \"$status\" || exit 1\n  fi\n  exit \"$result\"\n}\ntrap signal_result EXIT\napt-get update\napt-get install -y --no-install-recommends awscli ca-certificates python3 python3-venv\ninstall -d -m 0755 /opt/netvuln /opt/netvuln/repo\nmkdir -p /etc/netvuln\naws s3 cp 's3://${ArtifactsBucket}/${ArtifactsPrefix}/bundle.tar.gz' /opt/netvuln/bundle.tar.gz --only-show-errors\nprintf '%s  %s\\n' '${BundleSha256}' /opt/netvuln/bundle.tar.gz | sha256sum --check --strict\ntar --extract --gzip --file /opt/netvuln/bundle.tar.gz --directory /opt/netvuln/repo --no-same-owner\nfind /opt/netvuln/repo -type d -exec chmod 0755 {} +\ncat > /etc/netvuln/bootstrap.json <<'NETVULN_CONFIG'\n{\"kind\": \"target\", \"artifacts_bucket\": \"${ArtifactsBucket}\", \"artifacts_prefix\": \"${ArtifactsPrefix}\", \"region\": \"${AWS::Region}\", \"fleet_id\": \"${FleetId}\", \"device_id\": \"${DeviceId}\"}\nNETVULN_CONFIG\ncd /opt/netvuln/repo\npython3 -m infra.aws.bootstrap --config /etc/netvuln/bootstrap.json\n"
+          }
+        }
+      },
+      "CreationPolicy": {
+        "ResourceSignal": {
+          "Count": 1,
+          "Timeout": "PT120M"
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "InstanceId": {
+      "Value": {
+        "Ref": "Node"
+      }
+    },
+    "PrivateIp": {
+      "Value": {
+        "Fn::GetAtt": [
+          "Node",
+          "PrivateIp"
+        ]
+      }
+    }
+  },
+  "Mappings": {
+    "Targets": {
+      "FRRA": {
+        "Ip": "10.53.1.10",
+        "Product": "frr",
+        "Version": "8.5.2"
+      },
+      "FRRB": {
+        "Ip": "10.53.1.11",
+        "Product": "frr",
+        "Version": "9.0.1"
+      },
+      "NGINXA": {
+        "Ip": "10.53.20.10",
+        "Product": "nginx",
+        "Version": "1.24.0"
+      },
+      "NGINXB": {
+        "Ip": "10.53.21.10",
+        "Product": "nginx",
+        "Version": "1.26.2"
+      },
+      "APACHEA": {
+        "Ip": "10.53.20.11",
+        "Product": "apache",
+        "Version": "2.4.49"
+      },
+      "APACHEB": {
+        "Ip": "10.53.21.11",
+        "Product": "apache",
+        "Version": "2.4.50"
+      },
+      "BINDA": {
+        "Ip": "10.53.20.12",
+        "Product": "bind",
+        "Version": "9.18.19"
+      },
+      "BINDB": {
+        "Ip": "10.53.21.12",
+        "Product": "bind",
+        "Version": "9.18.24"
+      },
+      "OPENVPNA": {
+        "Ip": "10.53.10.20",
+        "Product": "openvpn",
+        "Version": "2.6.8"
+      },
+      "OPENVPNB": {
+        "Ip": "10.53.11.20",
+        "Product": "openvpn",
+        "Version": "2.6.10"
+      },
+      "OPENSSHA": {
+        "Ip": "10.53.10.10",
+        "Product": "openssh",
+        "Version": "9.6p1"
+      },
+      "OPENSSHB": {
+        "Ip": "10.53.11.10",
+        "Product": "openssh",
+        "Version": "9.7p1"
+      },
+      "HAPROXYA": {
+        "Ip": "10.53.20.13",
+        "Product": "haproxy",
+        "Version": "2.8.0"
+      },
+      "HAPROXYB": {
+        "Ip": "10.53.21.13",
+        "Product": "haproxy",
+        "Version": "2.8.9"
+      },
+      "DNSMASQA": {
+        "Ip": "10.53.20.14",
+        "Product": "dnsmasq",
+        "Version": "2.86"
+      },
+      "DNSMASQB": {
+        "Ip": "10.53.21.14",
+        "Product": "dnsmasq",
+        "Version": "2.90"
+      }
+    }
+  },
+  "Conditions": {
+    "IsRouter": {
+      "Fn::Equals": [
+        {
+          "Fn::FindInMap": [
+            "Targets",
+            {
+              "Ref": "DeviceKey"
+            },
+            "Product"
+          ]
+        },
+        "frr"
+      ]
+    }
+  }
+}

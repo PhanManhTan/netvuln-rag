@@ -1,0 +1,207 @@
+\documentclass[11pt,a4paper]{article}
+
+% Bien dich bang pdfLaTeX (khong can fontspec)
+\usepackage[top=14mm,bottom=14mm,left=16mm,right=16mm]{geometry}
+\usepackage[T5]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[vietnamese]{babel}
+\usepackage{lmodern}
+\usepackage{amsmath,amssymb}
+\usepackage{array,tabularx,booktabs}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{hyperref}
+\usepackage{microtype}
+\usepackage[table]{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta}
+\hypersetup{hidelinks,breaklinks=true}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{2.5pt}
+\setlist[itemize]{leftmargin=1.4em,itemsep=0pt,topsep=1pt,parsep=0pt}
+\setlist[enumerate]{leftmargin=1.55em,itemsep=0pt,topsep=1pt,parsep=0pt}
+\renewcommand{\arraystretch}{1.10}
+\titleformat{\section}{\normalsize\bfseries}{}{0pt}{}
+\titleformat{\subsection}{\small\bfseries}{}{0pt}{}
+\titlespacing*{\section}{0pt}{6pt}{2pt}
+\titlespacing*{\subsection}{0pt}{4pt}{1pt}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+\newcolumntype{P}[1]{>{\raggedright\arraybackslash}p{#1}}
+\newcolumntype{C}[1]{>{\centering\arraybackslash}m{#1}}
+\newcolumntype{M}[1]{>{\raggedright\arraybackslash}m{#1}}
+\newcommand{\code}[1]{\texttt{\small #1}}
+\newenvironment{flow}{\par\vspace{2pt}\begingroup\centering\small}{\par\endgroup\vspace{2pt}}
+
+\begin{document}
+\begin{center}
+    {\normalsize\bfseries THUYẾT MINH ĐỀ TÀI -- NT539.R11}\\[-1pt]
+    {\small AI ỨNG DỤNG TRONG MẠNG VÀ TRUYỀN THÔNG}\\[2pt]
+    {\bfseries RAG tra cứu lỗ hổng cho thiết bị mạng có trích dẫn}\\[2pt]
+    {\small GVHD: PGS.TS. Lê Kim Hùng\\
+    SVTH: Phan Mạnh Tân (23521404), Lê Xuân Hoàng (23520524)}
+\end{center}
+\vspace{-8pt}
+
+\section*{1. Giới thiệu bài toán}
+
+\textbf{Bài toán:} Trả lời câu hỏi về các lỗ hổng đã công bố của phần mềm đang cài trên thiết bị trong mạng của người dùng, kèm trích dẫn nguồn. Hệ thống tự lấy tên phần mềm và phiên bản từ các máy đã đăng ký để tra cứu.
+
+\textbf{Ví dụ câu hỏi:} \emph{“Trong mạng của tôi, thiết bị nào đang chạy phần mềm có lỗ hổng bảo mật đã công bố?”}
+
+\textbf{Kết quả:} Liệt kê thiết bị, phần mềm - phiên bản, CVE liên quan và nguồn trích dẫn. Thiết bị nào thiếu thông tin hoặc chưa có đủ tài liệu thì được ghi rõ là chưa đủ bằng chứng.
+
+\section*{2. Dữ liệu}
+
+\textbf{Data collection:} Thu thập CVE/advisory từ NVD và nhà phát triển cho các phần mềm mạng. Mỗi phần mềm lấy 5 stable releases mới nhất; lưu version, affected range và source URL để xây knowledge base.
+
+\textbf{Experiment setup:} Mỗi phần mềm dùng 2 test versions cố định.
+\begin{flow}
+\rowcolors{2}{black!3}{white}
+\renewcommand{\arraystretch}{1.18}
+\begin{tabularx}{\linewidth}{@{}p{4.1cm}Yp{4.0cm}@{}}
+\toprule
+\rowcolor{black!9}
+\textbf{Software} & \textbf{Thành phần triển khai} & \textbf{Test versions}\\
+\midrule
+FRRouting & Router (Linux VM) & 8.5.2; 9.0.1\\
+Nginx & Web Server / Reverse Proxy & 1.24.0; 1.26.2\\
+Apache HTTP Server & Web Server & 2.4.49; 2.4.50\\
+BIND 9 & DNS Server & 9.18.19; 9.18.24\\
+OpenVPN & VPN Server / Client & 2.6.8; 2.6.10\\
+OpenSSH Portable & Router, Server và Client (SSH) & 9.6p1; 9.7p1\\
+HAProxy & Load Balancer / Reverse Proxy & 2.8.0; 2.8.9\\
+dnsmasq & DNS Server hoặc Router Linux & 2.86; 2.90\\
+\bottomrule
+\end{tabularx}
+\end{flow}
+
+\section*{3. Phương pháp và kiến trúc hệ thống}
+
+\textbf{Mô hình tổng quát:} Người dùng hỏi RAG; RAG lấy dữ liệu các thành phần trong mô hình mạng từ collector, kết hợp kho CVE/advisory để xử lý và trả lời. Collector thu thập thông tin phần mềm từ hệ thống mạng.
+
+\begin{flow}
+\resizebox{\linewidth}{!}{%
+\begin{tikzpicture}[
+    font=\small,
+    box/.style={draw=black!65, rounded corners=2pt, fill=white,
+        align=center, minimum height=0.85cm, inner sep=4pt},
+    link/.style={-{Stealth[length=2mm]}, thick, draw=black!75},
+    wire/.style={thick, draw=black!55}
+]
+    \path[use as bounding box] (-0.05,-0.05) rectangle (17.45,5.15);
+    \filldraw[rounded corners=3pt, fill=black!2, draw=black!45]
+        (8.25,0) rectangle (17.4,3.1);
+    \node[anchor=east, font=\small\bfseries] at (17.1,2.83) {Network system};
+
+    \node[box, text width=2.5cm] (user) at (1.55,4.4) {Người dùng};
+    \node[box, text width=3.2cm, minimum height=1.05cm] (rag) at (5.8,4.4)
+        {RAG System};
+    \node[box, text width=3.3cm, minimum height=1.05cm] (collector) at (10.5,4.4)
+        {Collector};
+    \node[box, text width=3.8cm] (kb) at (5.8,1.9)
+        {Knowledge base};
+
+    \draw[link] ([yshift=2mm]user.east) --
+        node[above, font=\scriptsize] {Ask} ([yshift=2mm]rag.west);
+    \draw[link] ([yshift=-2mm]rag.west) --
+        node[below, font=\scriptsize] {Response} ([yshift=-2mm]user.east);
+    \draw[link] ([yshift=2mm]rag.east) --
+        node[above, font=\scriptsize] {Request} ([yshift=2mm]collector.west);
+    \draw[link] ([yshift=-2mm]collector.west) --
+        node[below, font=\scriptsize] {Data} ([yshift=-2mm]rag.east);
+    \draw[link, <->] (rag.south) --
+        node[left, font=\scriptsize] {Retrieval} (kb.north);
+
+    \node[box, text width=2.3cm, minimum height=0.7cm] (router) at (10.5,2.08) {Router};
+    \node[box, text width=2.3cm, minimum height=0.7cm] (switch) at (14.8,2.08) {Switch};
+    \draw[link, <->] (collector.south) --
+        node[left, pos=0.2, font=\scriptsize] {SSH/API} (router.north);
+    \draw[wire] (router.east) -- (switch.west);
+    \node[box, font=\scriptsize, text width=1.7cm, minimum height=0.8cm] (vpn) at (9.45,0.53)
+        {VPN Server};
+    \node[box, font=\scriptsize, text width=1.7cm, minimum height=0.8cm] (dns) at (11.55,0.53)
+        {DNS Server};
+    \node[box, font=\scriptsize, text width=1.7cm, minimum height=0.8cm] (web) at (13.65,0.53)
+        {Web Server};
+    \node[box, font=\scriptsize, text width=1.7cm, minimum height=0.8cm] (client) at (15.75,0.53)
+        {Client};
+    \draw[wire] (switch.south) -- (14.8,1.25);
+    \draw[wire] (9.45,1.25) -- (15.75,1.25);
+    \foreach \device in {vpn,dns,web,client}
+        \draw[wire] (\device.north |- 0,1.25) -- (\device.north);
+\end{tikzpicture}%
+}
+\textit{Hình 1. Luồng hỏi đáp và thu thập thông tin từ hệ thống mạng.}
+\end{flow}
+
+\textbf{Experiment environment:} EC2 trên AWS cùng VPC. MGMT chạy RAG/collector; software đặt theo network role trong bảng. Switch minh họa hệ thống mạng thực tế.
+
+\newpage
+\subsection*{3.1. Indexing - Xây dựng cơ sở tri thức}
+
+\begin{flow}
+Crawl $\rightarrow$ Processing $\rightarrow$ Chunking
+$\rightarrow$ Embedding $\rightarrow$ Vector Database
+\end{flow}
+
+Thu thập CVE/advisory, chuẩn hóa, chia đoạn và lập chỉ mục Qdrant; giữ phiên bản và URL nguồn. Cập nhật theo đợt, không chờ câu hỏi mới thu thập tài liệu.
+
+\subsection*{3.2. Retrieval - Truy xuất tài liệu}
+
+\begin{flow}
+Câu hỏi $\rightarrow$ Thu thập phần mềm/phiên bản $\rightarrow$ Truy xuất CVE/advisory
+\end{flow}
+
+Collector cung cấp hiện trạng máy; RAG chỉ truy xuất knowledge base đã xây, không lấy thêm tài liệu bên ngoài khi trả lời. Lọc phần mềm/phiên bản, đối chiếu cấu hình; thiếu bằng chứng thì báo rõ.
+
+\subsection*{3.3. Generation - Sinh câu trả lời}
+
+\begin{flow}
+Câu hỏi + Thông tin máy + Tài liệu $\rightarrow$ LLM $\rightarrow$ Câu trả lời + Trích dẫn
+\end{flow}
+
+LLM trả lời theo bằng chứng đã truy xuất, kèm trích dẫn. Kiểm tra mã CVE và nguồn hỗ trợ; từ chối kết luận khi chưa đủ bằng chứng.
+
+\section*{4. Baseline và thiết kế thực nghiệm}
+
+\textbf{Test set:} 100 câu nhóm tự viết từ 16 test instances và CVE/advisory, bao phủ device, software/version, CVE cụ thể, đối chiếu nhiều thiết bị và source evidence. Mỗi câu có expected CVEs/kết luận và source URL.
+
+\textbf{Ba phương án so sánh:}
+\begin{flow}
+\rowcolors{2}{black!3}{white}
+\renewcommand{\arraystretch}{1.22}
+\begin{tabularx}{\linewidth}{@{}p{4.0cm}Y@{}}
+\toprule
+\rowcolor{black!9}
+\textbf{System} & \textbf{Input / Processing}\\
+\midrule
+LLM & Câu hỏi người dùng + thông tin mạng từ collector.\\
+RAG & Cùng câu hỏi + thông tin mạng; chỉ dùng thêm knowledge base đã xây.\\
+Greenbone/OpenVAS & Nhận tập thiết bị/IP và quyền truy cập; quét và trả CVE theo thiết bị.\\
+\bottomrule
+\end{tabularx}
+\end{flow}
+
+Cả ba phương án được đánh giá trên cùng một hệ thống mạng tại cùng thời điểm. LLM/RAG dùng cùng model, tham số và yêu cầu trích dẫn; đối chiếu kết quả theo thiết bị, phần mềm/phiên bản và CVE với đáp án chuẩn.
+
+\section*{5. Chỉ số đánh giá}
+
+\begin{flow}
+\rowcolors{2}{black!3}{white}
+\renewcommand{\arraystretch}{1.22}
+\renewcommand{\tabularxcolumn}[1]{m{#1}}
+\begin{tabularx}{\linewidth}{@{}M{3.2cm}Yp{3.3cm}@{}}
+\toprule
+\rowcolor{black!9}
+\textbf{Metric} & \textbf{Evaluation} & \textbf{Systems}\\
+\midrule
+Accuracy & Độ đúng toàn câu sau khi đối chiếu từng thiết bị/phần mềm với đáp án. & LLM, RAG\\
+Citation correctness & Source hỗ trợ đúng kết luận; kèm citation coverage. & LLM, RAG\\
+CVE hallucination rate & Tỷ lệ CVE ID không tồn tại, xác minh bằng nguồn chính thức. & LLM, RAG\\
+Precision / Recall & Tính theo từng thiết bị/phần mềm và CVE; báo TP, FP, FN. & Cả ba phương án\\
+Latency & Báo riêng collector, mỗi câu LLM/RAG và lượt quét Greenbone. & Theo từng tác vụ\\
+\bottomrule
+\end{tabularx}
+\end{flow}
+
+\end{document}

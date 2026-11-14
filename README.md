@@ -1,6 +1,8 @@
 # NetVuln RAG
 
-NetVuln RAG answers CVE questions with citations for OpenSSH, OpenVPN Community, and Fortinet FortiOS. The default product catalog queries NVD for the 16 software versions in the proposal.
+NetVuln RAG answers CVE questions with citations for OpenSSH, OpenVPN Community, and Fortinet FortiOS. The current product catalog queries NVD for 16 software versions.
+
+The [AWS experiment deployment](infra/aws/README.md) combines CloudFormation with agentless Ansible to install sixteen fixed software versions, collect real device facts, and check service readiness and network isolation. Workload flows have individual security groups and router firewall rules; sharing a VPC does not grant unrestricted access. All sixteen source builds have been checked locally, and a [live OpenSSH pilot](infra/aws/audit/PILOT.md) has compared LLM and RAG using Ansible facts. AWS deployment, reviewed CVE ground truth and the full benchmark remain pending; the [implementation audit](infra/aws/audit/IMPLEMENTATION.md) records the boundaries. The [revised proposal](proposal/proposal.pdf) plans CVE/advisory collection for five stable releases of eight products plus older test builds, two installed versions per product, and 100 questions; the [question draft](proposal/question-plan.md) still requires review. General RAG inventory integration and Greenbone provisioning are subsequent stages. The earlier [Docker validation report](proposal/validation/REPORT.md) is historical evidence.
 
 ## Repository layout
 
@@ -11,6 +13,9 @@ NetVuln RAG answers CVE questions with citations for OpenSSH, OpenVPN Community,
 | [`rag/`](rag/README.md) | Question parsing, version checks, retrieval, and cited answers |
 | [`api/`](api/README.md) | FastAPI requests and responses |
 | [`evaluation/`](evaluation/README.md) | Draft questions, benchmark runs, scoring examples, and the pilot chart |
+| [`infra/`](infra/aws/README.md) | CloudFormation, native installers, Ansible and network policy |
+| [`collector/`](collector/facts.py) | One-shot observed facts and immutable inventory snapshots |
+| [`proposal/`](proposal/README.md) | Revised proposal, PDF, and functional validation evidence |
 | `tests/` | Automated tests |
 | [`data/`](data/README.md) | Default storage root for source data and processed corpora |
 | `artifacts/` | Default storage root for evaluation datasets and results |
@@ -85,6 +90,12 @@ python -m evaluation.run
 
 The builder writes candidate questions to `$ARTIFACTS_DIR/evaluation/questions.jsonl`. Review the questions, expected CVEs, and citations before benchmarking. Select one or more benchmark modes with `--modes`. Index the corpus in Qdrant before evaluating RAG semantic queries. [Benchmark modes and their inputs](evaluation/README.md#run-the-benchmark)
 
+System evaluation reports answer quality and LLM efficiency as its main metric groups in `summary.json` and `metrics.csv`. LLM efficiency includes tokens, latency, observed output tokens/second, retries and failures. [Metric definitions](evaluation/README.md#metrics)
+
+Use `python -m evaluation.run --provider groq --limit 5 --stream` to watch live LLM output, followed by the final validated answer. Streaming runs also measure time to first text (TTFT), visible in the saved reports and terminal check.
+
+To compare saved answers in the terminal, run `python -m evaluation.manual_check`. The viewer opens with a whole-run LLM efficiency table (`u` repeats it). Selecting a question shows its LLM metrics, question text, system reference, full B0/B1/B2 answers and sources side by side, plus a CVE matrix with one CVE per row marked present, missing or extra. [Terminal viewer](evaluation/README.md#inspect-saved-answers-in-the-terminal)
+
 ## Run individual stages
 
 | Task | Command from the repository root | Read or edit |
@@ -111,4 +122,4 @@ Run `python -m data_pipeline.prepare --all-products` from crawl through Qdrant u
 
 For a fresh run from crawl through benchmark, use `python -m data_pipeline.prepare --all-products --evaluate --eval-limit 5`. This compares the raw and BM25 baselines with RAG. To benchmark a saved snapshot, include its matching `raw/` directory and use the separate evaluation commands. Open `netvuln-results/evaluation/<timestamp>/summary.json` in the Kaggle version's Output tab. [Metric definitions](evaluation/README.md#metrics)
 
-Run the offline test suite with `python -m pytest -q`.
+Install the test extra with `python -m pip install -e '.[test]'`, then run the offline test suite with `python -m pytest -q`.

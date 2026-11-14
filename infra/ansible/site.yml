@@ -1,0 +1,113 @@
+---
+- name: Install exact experiment releases and collect real facts over SSH
+  hosts: netvuln_targets
+  strategy: linear
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Wait for the registered SSH endpoint
+      ansible.builtin.wait_for_connection:
+        timeout: 300
+
+    - name: Gather OS and network facts
+      ansible.builtin.setup:
+        gather_subset: [min, network]
+
+    - name: Install declared build dependencies
+      ansible.builtin.apt:
+        name: "{{ netvuln_build_packages }}"
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Install and configure only when the locked state differs
+      ansible.builtin.command:
+        argv: [python3, -m, infra.aws.bootstrap, --install-target, --config, /etc/netvuln/bootstrap.json]
+        chdir: /opt/netvuln/repo
+      register: netvuln_install
+      changed_when: (netvuln_install.stdout_lines[-1] | from_json).changed
+
+    - name: Gather installed distribution packages
+      ansible.builtin.package_facts:
+        manager: apt
+
+    - name: Retain Ansible OS network and package facts on the control node
+      ansible.builtin.copy:
+        content: "{{ ansible_facts | to_nice_json }}\n"
+        dest: "{{ netvuln_run_dir }}/{{ inventory_hostname }}.ansible.json"
+        mode: '0600'
+      delegate_to: localhost
+      become: false
+
+    - name: Read target binary, effective configuration and running state
+      ansible.builtin.command:
+        argv: [python3, -m, collector.facts, --config, /etc/netvuln/facts.json]
+        chdir: /opt/netvuln/repo
+      register: netvuln_snapshot
+      changed_when: false
+      failed_when: false
+
+    - name: Save the observed snapshot on the control node
+      ansible.builtin.copy:
+        content: "{{ netvuln_snapshot.stdout | from_json | to_nice_json }}\n"
+        dest: "{{ netvuln_run_dir }}/{{ inventory_hostname }}.facts.json"
+        mode: '0600'
+      delegate_to: localhost
+      become: false
+
+    - name: Read router counters before any workload probe starts
+      ansible.builtin.command:
+        argv: [python3, -m, infra.aws.network_policy, --device, "{{ inventory_hostname }}", --verify-counters]
+        chdir: /opt/netvuln/repo
+      register: netvuln_routing_before
+      changed_when: false
+      failed_when: false
+      when: netvuln_target.product_id == 'frr'
+
+    - name: Save the router counter baseline
+      ansible.builtin.copy:
+        content: "{{ netvuln_routing_before.stdout | from_json | to_nice_json }}\n"
+        dest: "{{ netvuln_run_dir }}/{{ inventory_hostname }}.routing-before.json"
+        mode: '0600'
+      delegate_to: localhost
+      become: false
+      when: netvuln_target.product_id == 'frr'
+
+    - name: Check service functionality on each installed target
+      ansible.builtin.command:
+        argv: [python3, -m, infra.aws.probes, --local, --config, /etc/netvuln/bootstrap.json]
+        chdir: /opt/netvuln/repo
+      register: netvuln_probe
+      changed_when: false
+      failed_when: false
+
+    - name: Save functional probe evidence on the control node
+      ansible.builtin.copy:
+        content: "{{ netvuln_probe.stdout | from_json | to_nice_json }}\n"
+        dest: "{{ netvuln_run_dir }}/{{ inventory_hostname }}.probe.json"
+        mode: '0600'
+      delegate_to: localhost
+      become: false
+
+- name: Verify router forwarding after every workload probe has finished
+  hosts: netvuln_targets
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Retain packet counters proving the allowed client flow crossed FRR
+      ansible.builtin.command:
+        argv: [python3, -m, infra.aws.network_policy, --device, "{{ inventory_hostname }}", --verify-counters]
+        chdir: /opt/netvuln/repo
+      register: netvuln_routing
+      changed_when: false
+      failed_when: false
+      when: netvuln_target.product_id == 'frr'
+
+    - name: Save router forwarding evidence on the control node
+      ansible.builtin.copy:
+        content: "{{ netvuln_routing.stdout | from_json | to_nice_json }}\n"
+        dest: "{{ netvuln_run_dir }}/{{ inventory_hostname }}.routing.json"
+        mode: '0600'
+      delegate_to: localhost
+      become: false
+      when: netvuln_target.product_id == 'frr'

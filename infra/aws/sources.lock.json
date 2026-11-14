@@ -1,0 +1,141 @@
+{
+  "schema_version": 1,
+  "sources": {
+    "apache-2.4.49": {
+      "resolved_url": "https://codeload.github.com/apache/httpd/tar.gz/refs/tags/2.4.49",
+      "retrieved_at": "2026-11-14T15:45:18.897886+00:00",
+      "sha256": "e76c3f2b002bd79f82ad1f0a1a14f6e838ad3f6f04f4a4b20d9454f7fc3e4c1c",
+      "size_bytes": 12095889,
+      "url": "https://github.com/apache/httpd/archive/refs/tags/2.4.49.tar.gz",
+      "verification": "sha256_observed_over_https_not_vendor_signature"
+    },
+    "apache-2.4.50": {
+      "resolved_url": "https://codeload.github.com/apache/httpd/tar.gz/refs/tags/2.4.50",
+      "retrieved_at": "2026-11-14T15:45:19.452956+00:00",
+      "sha256": "1ac489de6ec0d3e7b07ed1b2104303e57ebfd19889797c50a5798d77e1160a06",
+      "size_bytes": 12548788,
+      "url": "https://github.com/apache/httpd/archive/refs/tags/2.4.50.tar.gz",
+      "verification": "sha256_observed_over_https_not_vendor_signature"
+    },
+    "bind-9.18.19": {
+      "resolved_url": "https://downloads.isc.org/isc/bind9/9.18.19/bind-9.18.19.tar.xz",
+      "retrieved_at": "2026-11-14T15:45:18.420240+00:00",
+      "sha256": "115e09c05439bebade1d272eda08fa88eb3b60129edef690588c87a4d27612cc",
+      "size_bytes": 5508464,
+      "url": "https://downloads.isc.org/isc/bind9/9.18.19/bind-9.18.19.tar.xz",
+      "verification": "sha256_observed_over_https_not_vendor_signature"
+    },
+    "bind-9.18.24": {
+      "resolved_url": "https://downloads.isc.org/isc/bind9/9.18.24/bind-9.18.24.tar.xz",
+      "retrieved_at": "2026-11-14T15:45:24.556799+00:00",
+      "sha256": "709d73023c9115ddad3bab65b6c8c79a590196d0d114f5d0ca2533dbd52ddf66",
+      "size_bytes": 5515528,
+      "url": "https://downloads.isc.org/isc/bind9/9.18.24/bind-9.18.24.tar.xz",
+      "verification": "sha256_observed_over_https_not_vendor_signature"
+    },
+    "dnsmasq-2.86": {
+      "resolved_url": "https://thekelleys.org.uk/dnsmasq/dnsmasq-2.86.tar.xz",
+      "retrieved_at": "2026-11-14T15:45:21.557654+00:00",
+      "sha256": "28d52cfc9e2004ac4f85274f52b32e1647b4dbc9761b82e7de1e41c49907eb08",
+      "size_bytes": 531404,
+      "url": "https://thekelleys.org.uk/dnsmasq/dnsmasq-2.86.tar.xz",
+      "verification": "sha256_observed_over_https_not_vendor_signature"
+    },
+    "dnsmasq-2.90": {
+      "resolved_url": "https://thekelleys.org.uk/dnsmasq/dnsmasq-2.90.tar.xz",
+      "retrieved_at": "2026-11-14T15:45:22.815566+00:00",
+      "sha256": "8e50309bd837bfec9649a812e066c09b6988b73d749b7d293c06c57d46a109e4",
+      "size_bytes": 570672,
+      "url": "https://thekelleys.org.uk/dnsmasq/dnsmasq-2.90.tar.xz",
+      "verification": "sha256_observed_over_https_not_vendor_signature"
+    },
+    "frr-8.5.2": {
+      "resolved_url": "https://codeload.github.com/FRRouting/frr/tar.gz/refs/tags/frr-8.5.2",
+      "retrieved_at": "2026-11-14T15:45:18.011041+00:00",
+      "sha256": "085408956bf875bb861646463f7e7634af90c194a888fac3bc8d1c70a57046c1",
+      "size_bytes": 10076639,
+      "url": "https://github.com/FRRouting/frr/archive/refs/tags/frr-8.5.2.tar.gz",
+      "verification": "sha256_observed_over_https_not_vendor_signature"
+    },
+    "frr-9.0.1": {
+      "resolved_url": "https://codeload.github.com/FRRouting/frr/tar.gz/refs/tags/frr-9.0.1",
+      "retrieved_at": "2026-11-14T15:45:16.998771+00:00",
+      "sha256": "3a371ece41cdf334b070811287f6733acabbadb442c8e693f8b66ec517592db7",
+      "size_bytes": 10334150,
+      "url": "https://github.com/FRRouting/frr/archive/refs/tags/frr-9.0.1.tar.gz",
+      "verification": "sha256_observed_over_https_not_vendor_signature"
+    },
+    "haproxy-2.8.0": {
+      "resolved_url": "https://www.haproxy.org/download/2.8/src/haproxy-2.8.0.tar.gz",
+      "retrieved_at": "2026-11-14T15:45:21.443239+00:00",
+      "sha256": "61cdafb5db7e9174d0757b8e4bcde938352306fb7cc8ff2b5f55c26dd48a6cf7",
+      "size_bytes": 4328018,
+      "url": "https://www.haproxy.org/download/2.8/src/haproxy-2.8.0.tar.gz",
+      "verification": "sha256_observed_over_https_not_vendor_signature"
+    },
+    "haproxy-2.8.9": {
+      "resolved_url": "https://www.haproxy.org/download/2.8/src/haproxy-2.8.9.tar.gz",
+      "retrieved_at": "2026-11-14T15:45:22.058689+00:00",
+      "sha256": "7a821478f36f847607f51a51e80f4f890c37af4811d60438e7f63783f67592ff",
+      "size_bytes": 4383096,
+      "url": "https://www.haproxy.org/download/2.8/src/haproxy-2.8.9.tar.gz",
+      "verification": "sha256_observed_over_https_not_vendor_signature"
+    },
+    "libyang-2.1.128": {
+      "resolved_url": "https://codeload.github.com/CESNET/libyang/tar.gz/refs/tags/v2.1.128",
+      "retrieved_at": "2026-11-14T15:45:15.634740+00:00",
+      "sha256": "19a5fe2742ccd68cc90bd7b28736d518ebea4241e798fa49a01b5e6f8a79928e",
+      "size_bytes": 1262102,
+      "url": "https://github.com/CESNET/libyang/archive/refs/tags/v2.1.128.tar.gz",
+      "verification": "sha256_observed_over_https_not_vendor_signature"
+    },
+    "nginx-1.24.0": {
+      "resolved_url": "https://nginx.org/download/nginx-1.24.0.tar.gz",
+      "retrieved_at": "2026-11-14T15:45:16.542138+00:00",
+      "sha256": "77a2541637b92a621e3ee76776c8b7b40cf6d707e69ba53a940283e30ff2f55d",
+      "size_bytes": 1112471,
+      "url": "https://nginx.org/download/nginx-1.24.0.tar.gz",
+      "verification": "sha256_observed_over_https_not_vendor_signature"
+    },
+    "nginx-1.26.2": {
+      "resolved_url": "https://nginx.org/download/nginx-1.26.2.tar.gz",
+      "retrieved_at": "2026-11-14T15:45:17.386878+00:00",
+      "sha256": "627fe086209bba80a2853a0add9d958d7ebbdffa1a8467a5784c9a6b4f03d738",
+      "size_bytes": 1244789,
+      "url": "https://nginx.org/download/nginx-1.26.2.tar.gz",
+      "verification": "sha256_observed_over_https_not_vendor_signature"
+    },
+    "openssh-9.6p1": {
+      "resolved_url": "https://cdn.openbsd.org/pub/OpenBSD/OpenSSH/portable/openssh-9.6p1.tar.gz",
+      "retrieved_at": "2026-11-14T15:45:19.153180+00:00",
+      "sha256": "910211c07255a8c5ad654391b40ee59800710dd8119dd5362de09385aa7a777c",
+      "size_bytes": 1857862,
+      "url": "https://cdn.openbsd.org/pub/OpenBSD/OpenSSH/portable/openssh-9.6p1.tar.gz",
+      "verification": "sha256_observed_over_https_not_vendor_signature"
+    },
+    "openssh-9.7p1": {
+      "resolved_url": "https://cdn.openbsd.org/pub/OpenBSD/OpenSSH/portable/openssh-9.7p1.tar.gz",
+      "retrieved_at": "2026-11-14T15:45:20.262208+00:00",
+      "sha256": "490426f766d82a2763fcacd8d83ea3d70798750c7bd2aff2e57dc5660f773ffd",
+      "size_bytes": 1848766,
+      "url": "https://cdn.openbsd.org/pub/OpenBSD/OpenSSH/portable/openssh-9.7p1.tar.gz",
+      "verification": "sha256_observed_over_https_not_vendor_signature"
+    },
+    "openvpn-2.6.10": {
+      "resolved_url": "https://swupdate.openvpn.net/community/releases/openvpn-2.6.10.tar.gz",
+      "retrieved_at": "2026-11-14T15:45:20.062343+00:00",
+      "sha256": "1993bbb7b9edb430626eaa24573f881fd3df642f427fcb824b1aed1fca1bcc9b",
+      "size_bytes": 1907280,
+      "url": "https://swupdate.openvpn.org/community/releases/openvpn-2.6.10.tar.gz",
+      "verification": "sha256_observed_over_https_not_vendor_signature"
+    },
+    "openvpn-2.6.8": {
+      "resolved_url": "https://swupdate.openvpn.net/community/releases/openvpn-2.6.8.tar.gz",
+      "retrieved_at": "2026-11-14T15:45:18.986721+00:00",
+      "sha256": "5ede1565c8a6d880100f7f235317a7ee9eea83d5052db5547f13a9e76af7805d",
+      "size_bytes": 1896563,
+      "url": "https://swupdate.openvpn.org/community/releases/openvpn-2.6.8.tar.gz",
+      "verification": "sha256_observed_over_https_not_vendor_signature"
+    }
+  }
+}

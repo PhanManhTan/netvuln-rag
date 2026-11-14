@@ -1,0 +1,1265 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "NetVuln private experiment network, symmetric FRR routes supplied by root stack",
+  "Parameters": {},
+  "Resources": {
+    "Vpc": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": "10.53.0.0/16",
+        "EnableDnsSupport": true,
+        "EnableDnsHostnames": true
+      }
+    },
+    "Gateway": {
+      "Type": "AWS::EC2::InternetGateway",
+      "Properties": {}
+    },
+    "GatewayAttachment": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "VpcId": {
+          "Ref": "Vpc"
+        },
+        "InternetGatewayId": {
+          "Ref": "Gateway"
+        }
+      }
+    },
+    "ManagementSubnet": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "Vpc"
+        },
+        "CidrBlock": "10.53.0.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "MapPublicIpOnLaunch": false
+      }
+    },
+    "ManagementRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "Vpc"
+        }
+      }
+    },
+    "ManagementAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "ManagementSubnet"
+        },
+        "RouteTableId": {
+          "Ref": "ManagementRouteTable"
+        }
+      }
+    },
+    "ManagementDefaultRoute": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "ManagementRouteTable"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "NatGatewayId": {
+          "Ref": "Nat"
+        }
+      }
+    },
+    "RouterSubnet": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "Vpc"
+        },
+        "CidrBlock": "10.53.1.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "MapPublicIpOnLaunch": false
+      }
+    },
+    "RouterRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "Vpc"
+        }
+      }
+    },
+    "RouterAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "RouterSubnet"
+        },
+        "RouteTableId": {
+          "Ref": "RouterRouteTable"
+        }
+      }
+    },
+    "RouterDefaultRoute": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "RouterRouteTable"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "NatGatewayId": {
+          "Ref": "Nat"
+        }
+      }
+    },
+    "ClientASubnet": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "Vpc"
+        },
+        "CidrBlock": "10.53.10.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "MapPublicIpOnLaunch": false
+      }
+    },
+    "ClientARouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "Vpc"
+        }
+      }
+    },
+    "ClientAAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "ClientASubnet"
+        },
+        "RouteTableId": {
+          "Ref": "ClientARouteTable"
+        }
+      }
+    },
+    "ClientADefaultRoute": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "ClientARouteTable"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "NatGatewayId": {
+          "Ref": "Nat"
+        }
+      }
+    },
+    "ClientBSubnet": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "Vpc"
+        },
+        "CidrBlock": "10.53.11.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "MapPublicIpOnLaunch": false
+      }
+    },
+    "ClientBRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "Vpc"
+        }
+      }
+    },
+    "ClientBAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "ClientBSubnet"
+        },
+        "RouteTableId": {
+          "Ref": "ClientBRouteTable"
+        }
+      }
+    },
+    "ClientBDefaultRoute": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "ClientBRouteTable"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "NatGatewayId": {
+          "Ref": "Nat"
+        }
+      }
+    },
+    "ServiceASubnet": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "Vpc"
+        },
+        "CidrBlock": "10.53.20.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "MapPublicIpOnLaunch": false
+      }
+    },
+    "ServiceARouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "Vpc"
+        }
+      }
+    },
+    "ServiceAAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "ServiceASubnet"
+        },
+        "RouteTableId": {
+          "Ref": "ServiceARouteTable"
+        }
+      }
+    },
+    "ServiceADefaultRoute": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "ServiceARouteTable"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "NatGatewayId": {
+          "Ref": "Nat"
+        }
+      }
+    },
+    "ServiceBSubnet": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "Vpc"
+        },
+        "CidrBlock": "10.53.21.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "MapPublicIpOnLaunch": false
+      }
+    },
+    "ServiceBRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "Vpc"
+        }
+      }
+    },
+    "ServiceBAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "ServiceBSubnet"
+        },
+        "RouteTableId": {
+          "Ref": "ServiceBRouteTable"
+        }
+      }
+    },
+    "ServiceBDefaultRoute": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "ServiceBRouteTable"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "NatGatewayId": {
+          "Ref": "Nat"
+        }
+      }
+    },
+    "EgressSubnet": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "Vpc"
+        },
+        "CidrBlock": "10.53.254.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "MapPublicIpOnLaunch": false
+      }
+    },
+    "EgressRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "Vpc"
+        }
+      }
+    },
+    "EgressAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "EgressSubnet"
+        },
+        "RouteTableId": {
+          "Ref": "EgressRouteTable"
+        }
+      }
+    },
+    "EgressDefaultRoute": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "EgressRouteTable"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": {
+          "Ref": "Gateway"
+        }
+      },
+      "DependsOn": "GatewayAttachment"
+    },
+    "NatAddress": {
+      "Type": "AWS::EC2::EIP",
+      "Properties": {
+        "Domain": "vpc"
+      },
+      "DependsOn": "GatewayAttachment"
+    },
+    "Nat": {
+      "Type": "AWS::EC2::NatGateway",
+      "Properties": {
+        "AllocationId": {
+          "Fn::GetAtt": [
+            "NatAddress",
+            "AllocationId"
+          ]
+        },
+        "SubnetId": {
+          "Ref": "EgressSubnet"
+        }
+      },
+      "DependsOn": "EgressDefaultRoute"
+    },
+    "FRRAGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "FRR-A declared service flows and management SSH",
+        "VpcId": {
+          "Ref": "Vpc"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 22,
+            "ToPort": 22,
+            "CidrIp": "10.53.0.10/32",
+            "Description": "Ansible management SSH only"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 80,
+            "ToPort": 80,
+            "CidrIp": "10.53.10.10/32",
+            "Description": "client-A-web"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 1024,
+            "ToPort": 65535,
+            "CidrIp": "10.53.20.13/32",
+            "Description": "client-A-web return traffic"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 22,
+            "ToPort": 22,
+            "CidrIp": "10.53.10.10/32",
+            "Description": "client-A-ssh"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 1024,
+            "ToPort": 65535,
+            "CidrIp": "10.53.20.11/32",
+            "Description": "client-A-ssh return traffic"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 53,
+            "ToPort": 53,
+            "CidrIp": "10.53.10.10/32",
+            "Description": "client-A-dns-tcp"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 1024,
+            "ToPort": 65535,
+            "CidrIp": "10.53.20.14/32",
+            "Description": "client-A-dns-tcp return traffic"
+          },
+          {
+            "IpProtocol": "udp",
+            "FromPort": 53,
+            "ToPort": 53,
+            "CidrIp": "10.53.10.10/32",
+            "Description": "client-A-dns-udp"
+          },
+          {
+            "IpProtocol": "udp",
+            "FromPort": 1024,
+            "ToPort": 65535,
+            "CidrIp": "10.53.20.14/32",
+            "Description": "client-A-dns-udp return traffic"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 179,
+            "ToPort": 179,
+            "CidrIp": "10.53.1.11/32",
+            "Description": "bgp-B"
+          },
+          {
+            "IpProtocol": "udp",
+            "FromPort": 1194,
+            "ToPort": 1194,
+            "CidrIp": "10.53.11.20/32",
+            "Description": "vpn-underlay"
+          },
+          {
+            "IpProtocol": "udp",
+            "FromPort": 1024,
+            "ToPort": 65535,
+            "CidrIp": "10.53.10.20/32",
+            "Description": "vpn-underlay return traffic"
+          }
+        ],
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Bootstrap egress; destination ingress and router firewall enforce workload isolation"
+          }
+        ]
+      }
+    },
+    "FRRBGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "FRR-B declared service flows and management SSH",
+        "VpcId": {
+          "Ref": "Vpc"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 22,
+            "ToPort": 22,
+            "CidrIp": "10.53.0.10/32",
+            "Description": "Ansible management SSH only"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 179,
+            "ToPort": 179,
+            "CidrIp": "10.53.1.10/32",
+            "Description": "bgp-A"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 80,
+            "ToPort": 80,
+            "CidrIp": "10.53.11.10/32",
+            "Description": "client-B-web"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 1024,
+            "ToPort": 65535,
+            "CidrIp": "10.53.21.13/32",
+            "Description": "client-B-web return traffic"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 22,
+            "ToPort": 22,
+            "CidrIp": "10.53.11.10/32",
+            "Description": "client-B-ssh"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 1024,
+            "ToPort": 65535,
+            "CidrIp": "10.53.21.11/32",
+            "Description": "client-B-ssh return traffic"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 53,
+            "ToPort": 53,
+            "CidrIp": "10.53.11.10/32",
+            "Description": "client-B-dns-tcp"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 1024,
+            "ToPort": 65535,
+            "CidrIp": "10.53.21.14/32",
+            "Description": "client-B-dns-tcp return traffic"
+          },
+          {
+            "IpProtocol": "udp",
+            "FromPort": 53,
+            "ToPort": 53,
+            "CidrIp": "10.53.11.10/32",
+            "Description": "client-B-dns-udp"
+          },
+          {
+            "IpProtocol": "udp",
+            "FromPort": 1024,
+            "ToPort": 65535,
+            "CidrIp": "10.53.21.14/32",
+            "Description": "client-B-dns-udp return traffic"
+          }
+        ],
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Bootstrap egress; destination ingress and router firewall enforce workload isolation"
+          }
+        ]
+      }
+    },
+    "NGINXAGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "NGINX-A declared service flows and management SSH",
+        "VpcId": {
+          "Ref": "Vpc"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 22,
+            "ToPort": 22,
+            "CidrIp": "10.53.0.10/32",
+            "Description": "Ansible management SSH only"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 80,
+            "ToPort": 80,
+            "CidrIp": "10.53.20.13/32",
+            "Description": "frontend-A"
+          }
+        ],
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Bootstrap egress; destination ingress and router firewall enforce workload isolation"
+          }
+        ]
+      }
+    },
+    "NGINXBGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "NGINX-B declared service flows and management SSH",
+        "VpcId": {
+          "Ref": "Vpc"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 22,
+            "ToPort": 22,
+            "CidrIp": "10.53.0.10/32",
+            "Description": "Ansible management SSH only"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 80,
+            "ToPort": 80,
+            "CidrIp": "10.53.21.13/32",
+            "Description": "frontend-B"
+          }
+        ],
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Bootstrap egress; destination ingress and router firewall enforce workload isolation"
+          }
+        ]
+      }
+    },
+    "APACHEAGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "APACHE-A declared service flows and management SSH",
+        "VpcId": {
+          "Ref": "Vpc"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 22,
+            "ToPort": 22,
+            "CidrIp": "10.53.0.10/32",
+            "Description": "Ansible management SSH only"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 22,
+            "ToPort": 22,
+            "CidrIp": "10.53.10.10/32",
+            "Description": "client-A-ssh"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 80,
+            "ToPort": 80,
+            "CidrIp": "10.53.20.10/32",
+            "Description": "backend-A"
+          }
+        ],
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Bootstrap egress; destination ingress and router firewall enforce workload isolation"
+          }
+        ]
+      }
+    },
+    "APACHEBGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "APACHE-B declared service flows and management SSH",
+        "VpcId": {
+          "Ref": "Vpc"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 22,
+            "ToPort": 22,
+            "CidrIp": "10.53.0.10/32",
+            "Description": "Ansible management SSH only"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 22,
+            "ToPort": 22,
+            "CidrIp": "10.53.11.10/32",
+            "Description": "client-B-ssh"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 80,
+            "ToPort": 80,
+            "CidrIp": "10.53.21.10/32",
+            "Description": "backend-B"
+          }
+        ],
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Bootstrap egress; destination ingress and router firewall enforce workload isolation"
+          }
+        ]
+      }
+    },
+    "BINDAGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "BIND-A declared service flows and management SSH",
+        "VpcId": {
+          "Ref": "Vpc"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 22,
+            "ToPort": 22,
+            "CidrIp": "10.53.0.10/32",
+            "Description": "Ansible management SSH only"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 53,
+            "ToPort": 53,
+            "CidrIp": "10.53.20.14/32",
+            "Description": "forwarder-A-dns-tcp"
+          },
+          {
+            "IpProtocol": "udp",
+            "FromPort": 53,
+            "ToPort": 53,
+            "CidrIp": "10.53.20.14/32",
+            "Description": "forwarder-A-dns-udp"
+          }
+        ],
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Bootstrap egress; destination ingress and router firewall enforce workload isolation"
+          }
+        ]
+      }
+    },
+    "BINDBGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "BIND-B declared service flows and management SSH",
+        "VpcId": {
+          "Ref": "Vpc"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 22,
+            "ToPort": 22,
+            "CidrIp": "10.53.0.10/32",
+            "Description": "Ansible management SSH only"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 53,
+            "ToPort": 53,
+            "CidrIp": "10.53.21.14/32",
+            "Description": "forwarder-B-dns-tcp"
+          },
+          {
+            "IpProtocol": "udp",
+            "FromPort": 53,
+            "ToPort": 53,
+            "CidrIp": "10.53.21.14/32",
+            "Description": "forwarder-B-dns-udp"
+          }
+        ],
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Bootstrap egress; destination ingress and router firewall enforce workload isolation"
+          }
+        ]
+      }
+    },
+    "OPENVPNAGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "OPENVPN-A declared service flows and management SSH",
+        "VpcId": {
+          "Ref": "Vpc"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 22,
+            "ToPort": 22,
+            "CidrIp": "10.53.0.10/32",
+            "Description": "Ansible management SSH only"
+          },
+          {
+            "IpProtocol": "udp",
+            "FromPort": 1194,
+            "ToPort": 1194,
+            "CidrIp": "10.53.11.20/32",
+            "Description": "vpn-underlay"
+          }
+        ],
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Bootstrap egress; destination ingress and router firewall enforce workload isolation"
+          }
+        ]
+      }
+    },
+    "OPENVPNBGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "OPENVPN-B declared service flows and management SSH",
+        "VpcId": {
+          "Ref": "Vpc"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 22,
+            "ToPort": 22,
+            "CidrIp": "10.53.0.10/32",
+            "Description": "Ansible management SSH only"
+          }
+        ],
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Bootstrap egress; destination ingress and router firewall enforce workload isolation"
+          }
+        ]
+      }
+    },
+    "OPENSSHAGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "OPENSSH-A declared service flows and management SSH",
+        "VpcId": {
+          "Ref": "Vpc"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 22,
+            "ToPort": 22,
+            "CidrIp": "10.53.0.10/32",
+            "Description": "Ansible management SSH only"
+          }
+        ],
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Bootstrap egress; destination ingress and router firewall enforce workload isolation"
+          }
+        ]
+      }
+    },
+    "OPENSSHBGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "OPENSSH-B declared service flows and management SSH",
+        "VpcId": {
+          "Ref": "Vpc"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 22,
+            "ToPort": 22,
+            "CidrIp": "10.53.0.10/32",
+            "Description": "Ansible management SSH only"
+          }
+        ],
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Bootstrap egress; destination ingress and router firewall enforce workload isolation"
+          }
+        ]
+      }
+    },
+    "HAPROXYAGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "HAPROXY-A declared service flows and management SSH",
+        "VpcId": {
+          "Ref": "Vpc"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 22,
+            "ToPort": 22,
+            "CidrIp": "10.53.0.10/32",
+            "Description": "Ansible management SSH only"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 80,
+            "ToPort": 80,
+            "CidrIp": "10.53.10.10/32",
+            "Description": "client-A-web"
+          }
+        ],
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Bootstrap egress; destination ingress and router firewall enforce workload isolation"
+          }
+        ]
+      }
+    },
+    "HAPROXYBGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "HAPROXY-B declared service flows and management SSH",
+        "VpcId": {
+          "Ref": "Vpc"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 22,
+            "ToPort": 22,
+            "CidrIp": "10.53.0.10/32",
+            "Description": "Ansible management SSH only"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 80,
+            "ToPort": 80,
+            "CidrIp": "10.53.11.10/32",
+            "Description": "client-B-web"
+          }
+        ],
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Bootstrap egress; destination ingress and router firewall enforce workload isolation"
+          }
+        ]
+      }
+    },
+    "DNSMASQAGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "DNSMASQ-A declared service flows and management SSH",
+        "VpcId": {
+          "Ref": "Vpc"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 22,
+            "ToPort": 22,
+            "CidrIp": "10.53.0.10/32",
+            "Description": "Ansible management SSH only"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 53,
+            "ToPort": 53,
+            "CidrIp": "10.53.10.10/32",
+            "Description": "client-A-dns-tcp"
+          },
+          {
+            "IpProtocol": "udp",
+            "FromPort": 53,
+            "ToPort": 53,
+            "CidrIp": "10.53.10.10/32",
+            "Description": "client-A-dns-udp"
+          }
+        ],
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Bootstrap egress; destination ingress and router firewall enforce workload isolation"
+          }
+        ]
+      }
+    },
+    "DNSMASQBGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "DNSMASQ-B declared service flows and management SSH",
+        "VpcId": {
+          "Ref": "Vpc"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 22,
+            "ToPort": 22,
+            "CidrIp": "10.53.0.10/32",
+            "Description": "Ansible management SSH only"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 53,
+            "ToPort": 53,
+            "CidrIp": "10.53.11.10/32",
+            "Description": "client-B-dns-tcp"
+          },
+          {
+            "IpProtocol": "udp",
+            "FromPort": 53,
+            "ToPort": 53,
+            "CidrIp": "10.53.11.10/32",
+            "Description": "client-B-dns-udp"
+          }
+        ],
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Bootstrap egress; destination ingress and router firewall enforce workload isolation"
+          }
+        ]
+      }
+    },
+    "ManagementGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Ansible control node; no inbound access, management uses SSM",
+        "VpcId": {
+          "Ref": "Vpc"
+        },
+        "SecurityGroupIngress": [],
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "CidrIp": "0.0.0.0/0"
+          }
+        ]
+      }
+    },
+    "S3Endpoint": {
+      "Type": "AWS::EC2::VPCEndpoint",
+      "Properties": {
+        "VpcId": {
+          "Ref": "Vpc"
+        },
+        "VpcEndpointType": "Gateway",
+        "ServiceName": {
+          "Fn::Sub": "com.amazonaws.${AWS::Region}.s3"
+        },
+        "RouteTableIds": [
+          {
+            "Ref": "ManagementRouteTable"
+          },
+          {
+            "Ref": "RouterRouteTable"
+          },
+          {
+            "Ref": "ClientARouteTable"
+          },
+          {
+            "Ref": "ClientBRouteTable"
+          },
+          {
+            "Ref": "ServiceARouteTable"
+          },
+          {
+            "Ref": "ServiceBRouteTable"
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "ManagementSubnetId": {
+      "Value": {
+        "Ref": "ManagementSubnet"
+      }
+    },
+    "ManagementRouteTableId": {
+      "Value": {
+        "Ref": "ManagementRouteTable"
+      }
+    },
+    "RouterSubnetId": {
+      "Value": {
+        "Ref": "RouterSubnet"
+      }
+    },
+    "RouterRouteTableId": {
+      "Value": {
+        "Ref": "RouterRouteTable"
+      }
+    },
+    "ClientASubnetId": {
+      "Value": {
+        "Ref": "ClientASubnet"
+      }
+    },
+    "ClientARouteTableId": {
+      "Value": {
+        "Ref": "ClientARouteTable"
+      }
+    },
+    "ClientBSubnetId": {
+      "Value": {
+        "Ref": "ClientBSubnet"
+      }
+    },
+    "ClientBRouteTableId": {
+      "Value": {
+        "Ref": "ClientBRouteTable"
+      }
+    },
+    "ServiceASubnetId": {
+      "Value": {
+        "Ref": "ServiceASubnet"
+      }
+    },
+    "ServiceARouteTableId": {
+      "Value": {
+        "Ref": "ServiceARouteTable"
+      }
+    },
+    "ServiceBSubnetId": {
+      "Value": {
+        "Ref": "ServiceBSubnet"
+      }
+    },
+    "ServiceBRouteTableId": {
+      "Value": {
+        "Ref": "ServiceBRouteTable"
+      }
+    },
+    "EgressSubnetId": {
+      "Value": {
+        "Ref": "EgressSubnet"
+      }
+    },
+    "EgressRouteTableId": {
+      "Value": {
+        "Ref": "EgressRouteTable"
+      }
+    },
+    "FRRASecurityGroup": {
+      "Value": {
+        "Ref": "FRRAGroup"
+      }
+    },
+    "FRRBSecurityGroup": {
+      "Value": {
+        "Ref": "FRRBGroup"
+      }
+    },
+    "NGINXASecurityGroup": {
+      "Value": {
+        "Ref": "NGINXAGroup"
+      }
+    },
+    "NGINXBSecurityGroup": {
+      "Value": {
+        "Ref": "NGINXBGroup"
+      }
+    },
+    "APACHEASecurityGroup": {
+      "Value": {
+        "Ref": "APACHEAGroup"
+      }
+    },
+    "APACHEBSecurityGroup": {
+      "Value": {
+        "Ref": "APACHEBGroup"
+      }
+    },
+    "BINDASecurityGroup": {
+      "Value": {
+        "Ref": "BINDAGroup"
+      }
+    },
+    "BINDBSecurityGroup": {
+      "Value": {
+        "Ref": "BINDBGroup"
+      }
+    },
+    "OPENVPNASecurityGroup": {
+      "Value": {
+        "Ref": "OPENVPNAGroup"
+      }
+    },
+    "OPENVPNBSecurityGroup": {
+      "Value": {
+        "Ref": "OPENVPNBGroup"
+      }
+    },
+    "OPENSSHASecurityGroup": {
+      "Value": {
+        "Ref": "OPENSSHAGroup"
+      }
+    },
+    "OPENSSHBSecurityGroup": {
+      "Value": {
+        "Ref": "OPENSSHBGroup"
+      }
+    },
+    "HAPROXYASecurityGroup": {
+      "Value": {
+        "Ref": "HAPROXYAGroup"
+      }
+    },
+    "HAPROXYBSecurityGroup": {
+      "Value": {
+        "Ref": "HAPROXYBGroup"
+      }
+    },
+    "DNSMASQASecurityGroup": {
+      "Value": {
+        "Ref": "DNSMASQAGroup"
+      }
+    },
+    "DNSMASQBSecurityGroup": {
+      "Value": {
+        "Ref": "DNSMASQBGroup"
+      }
+    },
+    "VpcId": {
+      "Value": {
+        "Ref": "Vpc"
+      }
+    },
+    "ManagementSecurityGroup": {
+      "Value": {
+        "Ref": "ManagementGroup"
+      }
+    }
+  }
+}

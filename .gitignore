@@ -8,6 +8,16 @@ __pycache__/
 .ruff_cache/
 .coverage
 htmlcov/
+build/
+dist/
+*.egg-info/
+
+# Local Ansible/AWS state and private credentials.
+.ansible/
+.aws/
+*.retry
+*.pem
+*.key
 
 data/raw/*
 !data/raw/.gitkeep
@@ -18,6 +28,7 @@ data/reference/nvd/manifest.json
 qdrant_storage/
 artifacts/evaluation/
 artifacts/index/
+artifacts/aws/
 
 .idea/
 .vscode/

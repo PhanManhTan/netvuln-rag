@@ -1,0 +1,186 @@
+{
+  "started_at": "2026-11-10 14:33:29 UTC",
+  "scope": "Functional Docker lab and SSH collection; not an end-to-end RAG/CVE accuracy benchmark",
+  "commands": [
+    {
+      "id": "compose_config",
+      "command": "docker compose -f lab/compose.yaml config --quiet",
+      "exit_code": 0,
+      "output": ""
+    },
+    {
+      "id": "lab_up",
+      "command": "docker compose -f lab/compose.yaml up -d --wait --wait-timeout 90",
+      "exit_code": 0,
+      "output": " Container netvuln-lab-router-1 Healthy \n Container netvuln-lab-server-1 Starting \n Container netvuln-lab-server-1 Started \n Container netvuln-lab-server-1 Waiting \n Container netvuln-lab-server-1 Healthy \n Container netvuln-lab-client-1 Starting \n Container netvuln-lab-client-1 Started \n Container netvuln-lab-client-1 Waiting \n Container netvuln-lab-keys-1 Waiting \n Container netvuln-lab-router-1 Waiting \n Container netvuln-lab-server-1 Waiting \n Container netvuln-lab-keys-1 Exited \n Container netvuln-lab-router-1 Healthy \n Container netvuln-lab-server-1 Healthy \n Container netvuln-lab-client-1 Healthy \n"
+    },
+    {
+      "id": "routed_path",
+      "command": "docker compose -f lab/compose.yaml exec -T client python3 /opt/lab/tools.py check",
+      "exit_code": 0,
+      "output": "PASS: route to 172.30.20.20 uses R1 (172.30.10.254)\nPING 172.30.20.20 (172.30.20.20) 56(84) bytes of data.\n64 bytes from 172.30.20.20: icmp_seq=1 ttl=63 time=0.105 ms\n64 bytes from 172.30.20.20: icmp_seq=2 ttl=63 time=0.081 ms\n\n--- 172.30.20.20 ping statistics ---\n2 packets transmitted, 2 received, 0% packet loss, time 1034ms\nrtt min/avg/max/mdev = 0.081/0.093/0.105/0.012 ms\n\ntraceroute to 172.30.20.20 (172.30.20.20), 3 hops max, 60 byte packets\n 1  172.30.10.254  0.044 ms  0.015 ms  0.012 ms\n 2  172.30.20.20  0.025 ms  0.019 ms  0.018 ms\n\nPASS: SSH across the routed lab network returned real H1 facts\n"
+    },
+    {
+      "id": "baseline_collection",
+      "command": "docker compose -f lab/compose.yaml run --rm --no-deps -T collector",
+      "exit_code": 0,
+      "output": " Container netvuln-lab-collector-run-fdee6a3c48e2 Creating \n Container netvuln-lab-collector-run-fdee6a3c48e2 Created \n{\"asset_id\": \"R1\", \"role\": \"router\", \"collected_at\": \"2026-11-10T14:34:38.176118+00:00\", \"source\": {\"kind\": \"ssh_forced_facts_command\", \"schema_version\": 1}, \"os\": {\"PRETTY_NAME\": \"Debian GNU/Linux 12 (bookworm)\", \"NAME\": \"Debian GNU/Linux\", \"VERSION_ID\": \"12\", \"VERSION\": \"12 (bookworm)\", \"VERSION_CODENAME\": \"bookworm\", \"ID\": \"debian\", \"HOME_URL\": \"https://www.debian.org/\", \"SUPPORT_URL\": \"https://www.debian.org/support\", \"BUG_REPORT_URL\": \"https://bugs.debian.org/\"}, \"software\": [{\"product_id\": \"openssh\", \"component\": \"sshd\", \"package\": \"openssh-server\", \"package_version\": \"1:9.2p1-2+deb12u10\", \"binary_version\": \"OpenSSH_9.2, OpenSSL 3.0.22 25 Aug 2026\", \"running\": true}, {\"product_id\": \"openvpn\", \"package\": \"openvpn\", \"package_version\": \"2.6.14-0+deb12u2\", \"binary_version\": \"OpenVPN 2.6.14 x86_64-pc-linux-gnu [SSL (OpenSSL)] [LZO] [LZ4] [EPOLL] [PKCS11] [MH/PKTINFO] [AEAD] [DCO]\", \"running\": false}], \"configuration\": {\"ipv4_forwarding\": true, \"ssh_server\": {\"usepam\": \"no\", \"permitrootlogin\": \"forced-commands-only\", \"pubkeyauthentication\": \"yes\", \"passwordauthentication\": \"no\", \"x11forwarding\": \"no\", \"allowtcpforwarding\": \"no\", \"allowagentforwarding\": \"no\"}, \"ssh_client\": {\"user\": \"root\", \"destination\": \"172.30.20.20\", \"effective\": {\"canonicalizehostname\": \"false\", \"verifyhostkeydns\": \"false\", \"forwardagent\": \"no\"}}}, \"ipv4_routes\": [{\"dst\": \"default\", \"gateway\": \"172.30.10.1\", \"dev\": \"eth0\", \"flags\": []}, {\"dst\": \"172.30.0.0/24\", \"dev\": \"eth1\", \"protocol\": \"kernel\", \"scope\": \"link\", \"prefsrc\": \"172.30.0.11\", \"flags\": []}, {\"dst\": \"172.30.10.0/24\", \"dev\": \"eth0\", \"protocol\": \"kernel\", \"scope\": \"link\", \"prefsrc\": \"172.30.10.254\", \"flags\": []}, {\"dst\": \"172.30.20.0/24\", \"dev\": \"eth2\", \"protocol\": \"kernel\", \"scope\": \"link\", \"prefsrc\": \"172.30.20.254\", \"flags\": []}], \"limitations\": [\"Package versions are distribution builds and may contain backported fixes.\", \"Only selected settings are collected; this is not a complete CVE assessment.\", \"OpenVPN is installed on R1/C1; the base lab does not start a VPN tunnel.\"], \"collection_status\": \"collected\", \"management_ip\": \"172.30.0.11\"}\n{\"asset_id\": \"H1\", \"role\": \"server\", \"collected_at\": \"2026-11-10T14:34:38.461439+00:00\", \"source\": {\"kind\": \"ssh_forced_facts_command\", \"schema_version\": 1}, \"os\": {\"PRETTY_NAME\": \"Debian GNU/Linux 12 (bookworm)\", \"NAME\": \"Debian GNU/Linux\", \"VERSION_ID\": \"12\", \"VERSION\": \"12 (bookworm)\", \"VERSION_CODENAME\": \"bookworm\", \"ID\": \"debian\", \"HOME_URL\": \"https://www.debian.org/\", \"SUPPORT_URL\": \"https://www.debian.org/support\", \"BUG_REPORT_URL\": \"https://bugs.debian.org/\"}, \"software\": [{\"product_id\": \"openssh\", \"component\": \"sshd\", \"package\": \"openssh-server\", \"package_version\": \"1:9.2p1-2+deb12u10\", \"binary_version\": \"OpenSSH_9.2, OpenSSL 3.0.22 25 Aug 2026\", \"running\": true}], \"configuration\": {\"ipv4_forwarding\": false, \"ssh_server\": {\"usepam\": \"no\", \"permitrootlogin\": \"forced-commands-only\", \"pubkeyauthentication\": \"yes\", \"passwordauthentication\": \"no\", \"x11forwarding\": \"no\", \"allowtcpforwarding\": \"no\", \"allowagentforwarding\": \"no\"}, \"ssh_client\": {\"user\": \"root\", \"destination\": \"172.30.20.20\", \"effective\": {\"canonicalizehostname\": \"false\", \"verifyhostkeydns\": \"false\", \"forwardagent\": \"no\"}}}, \"ipv4_routes\": [{\"dst\": \"default\", \"gateway\": \"172.30.20.1\", \"dev\": \"eth1\", \"flags\": []}, {\"dst\": \"172.30.0.0/24\", \"dev\": \"eth0\", \"protocol\": \"kernel\", \"scope\": \"link\", \"prefsrc\": \"172.30.0.12\", \"flags\": []}, {\"dst\": \"172.30.10.0/24\", \"gateway\": \"172.30.20.254\", \"dev\": \"eth1\", \"flags\": []}, {\"dst\": \"172.30.20.0/24\", \"dev\": \"eth1\", \"protocol\": \"kernel\", \"scope\": \"link\", \"prefsrc\": \"172.30.20.20\", \"flags\": []}], \"limitations\": [\"Package versions are distribution builds and may contain backported fixes.\", \"Only selected settings are collected; this is not a complete CVE assessment.\", \"OpenVPN is installed on R1/C1; the base lab does not start a VPN tunnel.\"], \"collection_status\": \"collected\", \"management_ip\": \"172.30.0.12\"}\n{\"asset_id\": \"C1\", \"role\": \"client\", \"collected_at\": \"2026-11-10T14:34:38.758378+00:00\", \"source\": {\"kind\": \"ssh_forced_facts_command\", \"schema_version\": 1}, \"os\": {\"PRETTY_NAME\": \"Debian GNU/Linux 12 (bookworm)\", \"NAME\": \"Debian GNU/Linux\", \"VERSION_ID\": \"12\", \"VERSION\": \"12 (bookworm)\", \"VERSION_CODENAME\": \"bookworm\", \"ID\": \"debian\", \"HOME_URL\": \"https://www.debian.org/\", \"SUPPORT_URL\": \"https://www.debian.org/support\", \"BUG_REPORT_URL\": \"https://bugs.debian.org/\"}, \"software\": [{\"product_id\": \"openssh\", \"component\": \"sshd\", \"package\": \"openssh-server\", \"package_version\": \"1:9.2p1-2+deb12u10\", \"binary_version\": \"OpenSSH_9.2, OpenSSL 3.0.22 25 Aug 2026\", \"running\": true}, {\"product_id\": \"openvpn\", \"package\": \"openvpn\", \"package_version\": \"2.6.14-0+deb12u2\", \"binary_version\": \"OpenVPN 2.6.14 x86_64-pc-linux-gnu [SSL (OpenSSL)] [LZO] [LZ4] [EPOLL] [PKCS11] [MH/PKTINFO] [AEAD] [DCO]\", \"running\": false}], \"configuration\": {\"ipv4_forwarding\": false, \"ssh_server\": {\"usepam\": \"no\", \"permitrootlogin\": \"forced-commands-only\", \"pubkeyauthentication\": \"yes\", \"passwordauthentication\": \"no\", \"x11forwarding\": \"no\", \"allowtcpforwarding\": \"no\", \"allowagentforwarding\": \"no\"}, \"ssh_client\": {\"user\": \"root\", \"destination\": \"172.30.20.20\", \"effective\": {\"canonicalizehostname\": \"false\", \"verifyhostkeydns\": \"false\", \"forwardagent\": \"no\"}}}, \"ipv4_routes\": [{\"dst\": \"default\", \"gateway\": \"172.30.10.1\", \"dev\": \"eth1\", \"flags\": []}, {\"dst\": \"172.30.0.0/24\", \"dev\": \"eth0\", \"protocol\": \"kernel\", \"scope\": \"link\", \"prefsrc\": \"172.30.0.13\", \"flags\": []}, {\"dst\": \"172.30.10.0/24\", \"dev\": \"eth1\", \"protocol\": \"kernel\", \"scope\": \"link\", \"prefsrc\": \"172.30.10.10\", \"flags\": []}, {\"dst\": \"172.30.20.0/24\", \"gateway\": \"172.30.10.254\", \"dev\": \"eth1\", \"flags\": []}], \"limitations\": [\"Package versions are distribution builds and may contain backported fixes.\", \"Only selected settings are collected; this is not a complete CVE assessment.\", \"OpenVPN is installed on R1/C1; the base lab does not start a VPN tunnel.\"], \"collection_status\": \"collected\", \"management_ip\": \"172.30.0.13\"}\n"
+    },
+    {
+      "id": "enable_ssh_client_setting",
+      "command": "docker compose -f lab/compose.yaml exec -T client sh -c 'printf \"Host *\\n    VerifyHostKeyDNS yes\\n\" > /etc/ssh/ssh_config.d/99-lab.conf'",
+      "exit_code": 0,
+      "output": ""
+    },
+    {
+      "id": "changed_config_collection",
+      "command": "docker compose -f lab/compose.yaml run --rm --no-deps -T collector",
+      "exit_code": 0,
+      "output": " Container netvuln-lab-collector-run-8473e7c4c2b2 Creating \n Container netvuln-lab-collector-run-8473e7c4c2b2 Created \n{\"asset_id\": \"R1\", \"role\": \"router\", \"collected_at\": \"2026-11-10T14:35:30.859894+00:00\", \"source\": {\"kind\": \"ssh_forced_facts_command\", \"schema_version\": 1}, \"os\": {\"PRETTY_NAME\": \"Debian GNU/Linux 12 (bookworm)\", \"NAME\": \"Debian GNU/Linux\", \"VERSION_ID\": \"12\", \"VERSION\": \"12 (bookworm)\", \"VERSION_CODENAME\": \"bookworm\", \"ID\": \"debian\", \"HOME_URL\": \"https://www.debian.org/\", \"SUPPORT_URL\": \"https://www.debian.org/support\", \"BUG_REPORT_URL\": \"https://bugs.debian.org/\"}, \"software\": [{\"product_id\": \"openssh\", \"component\": \"sshd\", \"package\": \"openssh-server\", \"package_version\": \"1:9.2p1-2+deb12u10\", \"binary_version\": \"OpenSSH_9.2, OpenSSL 3.0.22 25 Aug 2026\", \"running\": true}, {\"product_id\": \"openvpn\", \"package\": \"openvpn\", \"package_version\": \"2.6.14-0+deb12u2\", \"binary_version\": \"OpenVPN 2.6.14 x86_64-pc-linux-gnu [SSL (OpenSSL)] [LZO] [LZ4] [EPOLL] [PKCS11] [MH/PKTINFO] [AEAD] [DCO]\", \"running\": false}], \"configuration\": {\"ipv4_forwarding\": true, \"ssh_server\": {\"usepam\": \"no\", \"permitrootlogin\": \"forced-commands-only\", \"pubkeyauthentication\": \"yes\", \"passwordauthentication\": \"no\", \"x11forwarding\": \"no\", \"allowtcpforwarding\": \"no\", \"allowagentforwarding\": \"no\"}, \"ssh_client\": {\"user\": \"root\", \"destination\": \"172.30.20.20\", \"effective\": {\"canonicalizehostname\": \"false\", \"verifyhostkeydns\": \"false\", \"forwardagent\": \"no\"}}}, \"ipv4_routes\": [{\"dst\": \"default\", \"gateway\": \"172.30.10.1\", \"dev\": \"eth0\", \"flags\": []}, {\"dst\": \"172.30.0.0/24\", \"dev\": \"eth1\", \"protocol\": \"kernel\", \"scope\": \"link\", \"prefsrc\": \"172.30.0.11\", \"flags\": []}, {\"dst\": \"172.30.10.0/24\", \"dev\": \"eth0\", \"protocol\": \"kernel\", \"scope\": \"link\", \"prefsrc\": \"172.30.10.254\", \"flags\": []}, {\"dst\": \"172.30.20.0/24\", \"dev\": \"eth2\", \"protocol\": \"kernel\", \"scope\": \"link\", \"prefsrc\": \"172.30.20.254\", \"flags\": []}], \"limitations\": [\"Package versions are distribution builds and may contain backported fixes.\", \"Only selected settings are collected; this is not a complete CVE assessment.\", \"OpenVPN is installed on R1/C1; the base lab does not start a VPN tunnel.\"], \"collection_status\": \"collected\", \"management_ip\": \"172.30.0.11\"}\n{\"asset_id\": \"H1\", \"role\": \"server\", \"collected_at\": \"2026-11-10T14:35:31.143121+00:00\", \"source\": {\"kind\": \"ssh_forced_facts_command\", \"schema_version\": 1}, \"os\": {\"PRETTY_NAME\": \"Debian GNU/Linux 12 (bookworm)\", \"NAME\": \"Debian GNU/Linux\", \"VERSION_ID\": \"12\", \"VERSION\": \"12 (bookworm)\", \"VERSION_CODENAME\": \"bookworm\", \"ID\": \"debian\", \"HOME_URL\": \"https://www.debian.org/\", \"SUPPORT_URL\": \"https://www.debian.org/support\", \"BUG_REPORT_URL\": \"https://bugs.debian.org/\"}, \"software\": [{\"product_id\": \"openssh\", \"component\": \"sshd\", \"package\": \"openssh-server\", \"package_version\": \"1:9.2p1-2+deb12u10\", \"binary_version\": \"OpenSSH_9.2, OpenSSL 3.0.22 25 Aug 2026\", \"running\": true}], \"configuration\": {\"ipv4_forwarding\": false, \"ssh_server\": {\"usepam\": \"no\", \"permitrootlogin\": \"forced-commands-only\", \"pubkeyauthentication\": \"yes\", \"passwordauthentication\": \"no\", \"x11forwarding\": \"no\", \"allowtcpforwarding\": \"no\", \"allowagentforwarding\": \"no\"}, \"ssh_client\": {\"user\": \"root\", \"destination\": \"172.30.20.20\", \"effective\": {\"canonicalizehostname\": \"false\", \"verifyhostkeydns\": \"false\", \"forwardagent\": \"no\"}}}, \"ipv4_routes\": [{\"dst\": \"default\", \"gateway\": \"172.30.20.1\", \"dev\": \"eth1\", \"flags\": []}, {\"dst\": \"172.30.0.0/24\", \"dev\": \"eth0\", \"protocol\": \"kernel\", \"scope\": \"link\", \"prefsrc\": \"172.30.0.12\", \"flags\": []}, {\"dst\": \"172.30.10.0/24\", \"gateway\": \"172.30.20.254\", \"dev\": \"eth1\", \"flags\": []}, {\"dst\": \"172.30.20.0/24\", \"dev\": \"eth1\", \"protocol\": \"kernel\", \"scope\": \"link\", \"prefsrc\": \"172.30.20.20\", \"flags\": []}], \"limitations\": [\"Package versions are distribution builds and may contain backported fixes.\", \"Only selected settings are collected; this is not a complete CVE assessment.\", \"OpenVPN is installed on R1/C1; the base lab does not start a VPN tunnel.\"], \"collection_status\": \"collected\", \"management_ip\": \"172.30.0.12\"}\n{\"asset_id\": \"C1\", \"role\": \"client\", \"collected_at\": \"2026-11-10T14:35:31.446965+00:00\", \"source\": {\"kind\": \"ssh_forced_facts_command\", \"schema_version\": 1}, \"os\": {\"PRETTY_NAME\": \"Debian GNU/Linux 12 (bookworm)\", \"NAME\": \"Debian GNU/Linux\", \"VERSION_ID\": \"12\", \"VERSION\": \"12 (bookworm)\", \"VERSION_CODENAME\": \"bookworm\", \"ID\": \"debian\", \"HOME_URL\": \"https://www.debian.org/\", \"SUPPORT_URL\": \"https://www.debian.org/support\", \"BUG_REPORT_URL\": \"https://bugs.debian.org/\"}, \"software\": [{\"product_id\": \"openssh\", \"component\": \"sshd\", \"package\": \"openssh-server\", \"package_version\": \"1:9.2p1-2+deb12u10\", \"binary_version\": \"OpenSSH_9.2, OpenSSL 3.0.22 25 Aug 2026\", \"running\": true}, {\"product_id\": \"openvpn\", \"package\": \"openvpn\", \"package_version\": \"2.6.14-0+deb12u2\", \"binary_version\": \"OpenVPN 2.6.14 x86_64-pc-linux-gnu [SSL (OpenSSL)] [LZO] [LZ4] [EPOLL] [PKCS11] [MH/PKTINFO] [AEAD] [DCO]\", \"running\": false}], \"configuration\": {\"ipv4_forwarding\": false, \"ssh_server\": {\"usepam\": \"no\", \"permitrootlogin\": \"forced-commands-only\", \"pubkeyauthentication\": \"yes\", \"passwordauthentication\": \"no\", \"x11forwarding\": \"no\", \"allowtcpforwarding\": \"no\", \"allowagentforwarding\": \"no\"}, \"ssh_client\": {\"user\": \"root\", \"destination\": \"172.30.20.20\", \"effective\": {\"canonicalizehostname\": \"false\", \"verifyhostkeydns\": \"true\", \"forwardagent\": \"no\"}}}, \"ipv4_routes\": [{\"dst\": \"default\", \"gateway\": \"172.30.10.1\", \"dev\": \"eth1\", \"flags\": []}, {\"dst\": \"172.30.0.0/24\", \"dev\": \"eth0\", \"protocol\": \"kernel\", \"scope\": \"link\", \"prefsrc\": \"172.30.0.13\", \"flags\": []}, {\"dst\": \"172.30.10.0/24\", \"dev\": \"eth1\", \"protocol\": \"kernel\", \"scope\": \"link\", \"prefsrc\": \"172.30.10.10\", \"flags\": []}, {\"dst\": \"172.30.20.0/24\", \"gateway\": \"172.30.10.254\", \"dev\": \"eth1\", \"flags\": []}], \"limitations\": [\"Package versions are distribution builds and may contain backported fixes.\", \"Only selected settings are collected; this is not a complete CVE assessment.\", \"OpenVPN is installed on R1/C1; the base lab does not start a VPN tunnel.\"], \"collection_status\": \"collected\", \"management_ip\": \"172.30.0.13\"}\n"
+    },
+    {
+      "id": "restore_ssh_client_setting",
+      "command": "docker compose -f lab/compose.yaml exec -T client sh -c 'printf \"Host *\\n    VerifyHostKeyDNS no\\n\" > /etc/ssh/ssh_config.d/99-lab.conf'",
+      "exit_code": 0,
+      "output": ""
+    },
+    {
+      "id": "restored_collection",
+      "command": "docker compose -f lab/compose.yaml run --rm --no-deps -T collector",
+      "exit_code": 0,
+      "output": " Container netvuln-lab-collector-run-826111b1257a Creating \n Container netvuln-lab-collector-run-826111b1257a Created \n{\"asset_id\": \"R1\", \"role\": \"router\", \"collected_at\": \"2026-11-10T14:37:06.961797+00:00\", \"source\": {\"kind\": \"ssh_forced_facts_command\", \"schema_version\": 1}, \"os\": {\"PRETTY_NAME\": \"Debian GNU/Linux 12 (bookworm)\", \"NAME\": \"Debian GNU/Linux\", \"VERSION_ID\": \"12\", \"VERSION\": \"12 (bookworm)\", \"VERSION_CODENAME\": \"bookworm\", \"ID\": \"debian\", \"HOME_URL\": \"https://www.debian.org/\", \"SUPPORT_URL\": \"https://www.debian.org/support\", \"BUG_REPORT_URL\": \"https://bugs.debian.org/\"}, \"software\": [{\"product_id\": \"openssh\", \"component\": \"sshd\", \"package\": \"openssh-server\", \"package_version\": \"1:9.2p1-2+deb12u10\", \"binary_version\": \"OpenSSH_9.2, OpenSSL 3.0.22 25 Aug 2026\", \"running\": true}, {\"product_id\": \"openvpn\", \"package\": \"openvpn\", \"package_version\": \"2.6.14-0+deb12u2\", \"binary_version\": \"OpenVPN 2.6.14 x86_64-pc-linux-gnu [SSL (OpenSSL)] [LZO] [LZ4] [EPOLL] [PKCS11] [MH/PKTINFO] [AEAD] [DCO]\", \"running\": false}], \"configuration\": {\"ipv4_forwarding\": true, \"ssh_server\": {\"usepam\": \"no\", \"permitrootlogin\": \"forced-commands-only\", \"pubkeyauthentication\": \"yes\", \"passwordauthentication\": \"no\", \"x11forwarding\": \"no\", \"allowtcpforwarding\": \"no\", \"allowagentforwarding\": \"no\"}, \"ssh_client\": {\"user\": \"root\", \"destination\": \"172.30.20.20\", \"effective\": {\"canonicalizehostname\": \"false\", \"verifyhostkeydns\": \"false\", \"forwardagent\": \"no\"}}}, \"ipv4_routes\": [{\"dst\": \"default\", \"gateway\": \"172.30.10.1\", \"dev\": \"eth0\", \"flags\": []}, {\"dst\": \"172.30.0.0/24\", \"dev\": \"eth1\", \"protocol\": \"kernel\", \"scope\": \"link\", \"prefsrc\": \"172.30.0.11\", \"flags\": []}, {\"dst\": \"172.30.10.0/24\", \"dev\": \"eth0\", \"protocol\": \"kernel\", \"scope\": \"link\", \"prefsrc\": \"172.30.10.254\", \"flags\": []}, {\"dst\": \"172.30.20.0/24\", \"dev\": \"eth2\", \"protocol\": \"kernel\", \"scope\": \"link\", \"prefsrc\": \"172.30.20.254\", \"flags\": []}], \"limitations\": [\"Package versions are distribution builds and may contain backported fixes.\", \"Only selected settings are collected; this is not a complete CVE assessment.\", \"OpenVPN is installed on R1/C1; the base lab does not start a VPN tunnel.\"], \"collection_status\": \"collected\", \"management_ip\": \"172.30.0.11\"}\n{\"asset_id\": \"H1\", \"role\": \"server\", \"collected_at\": \"2026-11-10T14:37:07.263349+00:00\", \"source\": {\"kind\": \"ssh_forced_facts_command\", \"schema_version\": 1}, \"os\": {\"PRETTY_NAME\": \"Debian GNU/Linux 12 (bookworm)\", \"NAME\": \"Debian GNU/Linux\", \"VERSION_ID\": \"12\", \"VERSION\": \"12 (bookworm)\", \"VERSION_CODENAME\": \"bookworm\", \"ID\": \"debian\", \"HOME_URL\": \"https://www.debian.org/\", \"SUPPORT_URL\": \"https://www.debian.org/support\", \"BUG_REPORT_URL\": \"https://bugs.debian.org/\"}, \"software\": [{\"product_id\": \"openssh\", \"component\": \"sshd\", \"package\": \"openssh-server\", \"package_version\": \"1:9.2p1-2+deb12u10\", \"binary_version\": \"OpenSSH_9.2, OpenSSL 3.0.22 25 Aug 2026\", \"running\": true}], \"configuration\": {\"ipv4_forwarding\": false, \"ssh_server\": {\"usepam\": \"no\", \"permitrootlogin\": \"forced-commands-only\", \"pubkeyauthentication\": \"yes\", \"passwordauthentication\": \"no\", \"x11forwarding\": \"no\", \"allowtcpforwarding\": \"no\", \"allowagentforwarding\": \"no\"}, \"ssh_client\": {\"user\": \"root\", \"destination\": \"172.30.20.20\", \"effective\": {\"canonicalizehostname\": \"false\", \"verifyhostkeydns\": \"false\", \"forwardagent\": \"no\"}}}, \"ipv4_routes\": [{\"dst\": \"default\", \"gateway\": \"172.30.20.1\", \"dev\": \"eth1\", \"flags\": []}, {\"dst\": \"172.30.0.0/24\", \"dev\": \"eth0\", \"protocol\": \"kernel\", \"scope\": \"link\", \"prefsrc\": \"172.30.0.12\", \"flags\": []}, {\"dst\": \"172.30.10.0/24\", \"gateway\": \"172.30.20.254\", \"dev\": \"eth1\", \"flags\": []}, {\"dst\": \"172.30.20.0/24\", \"dev\": \"eth1\", \"protocol\": \"kernel\", \"scope\": \"link\", \"prefsrc\": \"172.30.20.20\", \"flags\": []}], \"limitations\": [\"Package versions are distribution builds and may contain backported fixes.\", \"Only selected settings are collected; this is not a complete CVE assessment.\", \"OpenVPN is installed on R1/C1; the base lab does not start a VPN tunnel.\"], \"collection_status\": \"collected\", \"management_ip\": \"172.30.0.12\"}\n{\"asset_id\": \"C1\", \"role\": \"client\", \"collected_at\": \"2026-11-10T14:37:07.589904+00:00\", \"source\": {\"kind\": \"ssh_forced_facts_command\", \"schema_version\": 1}, \"os\": {\"PRETTY_NAME\": \"Debian GNU/Linux 12 (bookworm)\", \"NAME\": \"Debian GNU/Linux\", \"VERSION_ID\": \"12\", \"VERSION\": \"12 (bookworm)\", \"VERSION_CODENAME\": \"bookworm\", \"ID\": \"debian\", \"HOME_URL\": \"https://www.debian.org/\", \"SUPPORT_URL\": \"https://www.debian.org/support\", \"BUG_REPORT_URL\": \"https://bugs.debian.org/\"}, \"software\": [{\"product_id\": \"openssh\", \"component\": \"sshd\", \"package\": \"openssh-server\", \"package_version\": \"1:9.2p1-2+deb12u10\", \"binary_version\": \"OpenSSH_9.2, OpenSSL 3.0.22 25 Aug 2026\", \"running\": true}, {\"product_id\": \"openvpn\", \"package\": \"openvpn\", \"package_version\": \"2.6.14-0+deb12u2\", \"binary_version\": \"OpenVPN 2.6.14 x86_64-pc-linux-gnu [SSL (OpenSSL)] [LZO] [LZ4] [EPOLL] [PKCS11] [MH/PKTINFO] [AEAD] [DCO]\", \"running\": false}], \"configuration\": {\"ipv4_forwarding\": false, \"ssh_server\": {\"usepam\": \"no\", \"permitrootlogin\": \"forced-commands-only\", \"pubkeyauthentication\": \"yes\", \"passwordauthentication\": \"no\", \"x11forwarding\": \"no\", \"allowtcpforwarding\": \"no\", \"allowagentforwarding\": \"no\"}, \"ssh_client\": {\"user\": \"root\", \"destination\": \"172.30.20.20\", \"effective\": {\"canonicalizehostname\": \"false\", \"verifyhostkeydns\": \"false\", \"forwardagent\": \"no\"}}}, \"ipv4_routes\": [{\"dst\": \"default\", \"gateway\": \"172.30.10.1\", \"dev\": \"eth1\", \"flags\": []}, {\"dst\": \"172.30.0.0/24\", \"dev\": \"eth0\", \"protocol\": \"kernel\", \"scope\": \"link\", \"prefsrc\": \"172.30.0.13\", \"flags\": []}, {\"dst\": \"172.30.10.0/24\", \"dev\": \"eth1\", \"protocol\": \"kernel\", \"scope\": \"link\", \"prefsrc\": \"172.30.10.10\", \"flags\": []}, {\"dst\": \"172.30.20.0/24\", \"gateway\": \"172.30.10.254\", \"dev\": \"eth1\", \"flags\": []}], \"limitations\": [\"Package versions are distribution builds and may contain backported fixes.\", \"Only selected settings are collected; this is not a complete CVE assessment.\", \"OpenVPN is installed on R1/C1; the base lab does not start a VPN tunnel.\"], \"collection_status\": \"collected\", \"management_ip\": \"172.30.0.13\"}\n"
+    },
+    {
+      "id": "stop_router",
+      "command": "docker compose -f lab/compose.yaml stop router",
+      "exit_code": 0,
+      "output": " Container netvuln-lab-router-1 Stopping \n Container netvuln-lab-router-1 Stopped \n"
+    },
+    {
+      "id": "router_down_ping",
+      "command": "docker compose -f lab/compose.yaml exec -T client ping -n -c 2 -W 1 172.30.20.20",
+      "exit_code": 1,
+      "output": "PING 172.30.20.20 (172.30.20.20) 56(84) bytes of data.\n\n--- 172.30.20.20 ping statistics ---\n2 packets transmitted, 0 received, 100% packet loss, time 1010ms\n\n"
+    },
+    {
+      "id": "unavailable_collection",
+      "command": "docker compose -f lab/compose.yaml run --rm --no-deps -T collector",
+      "exit_code": 1,
+      "output": " Container netvuln-lab-collector-run-7224f1a4397d Creating \n Container netvuln-lab-collector-run-7224f1a4397d Created \n{\"asset_id\": \"R1\", \"management_ip\": \"172.30.0.11\", \"collected_at\": \"2026-11-10T14:37:14.263464+00:00\", \"collection_status\": \"error\", \"error\": \"Command '('ssh', '-i', '/lab/keys/id_ed25519', '-o', 'BatchMode=yes', '-o', 'IdentitiesOnly=yes', '-o', 'ConnectTimeout=5', '-o', 'StrictHostKeyChecking=accept-new', '-o', 'UserKnownHostsFile=/tmp/netvuln-ssh-vmtfb4ju/known_hosts', 'root@172.30.0.11', 'facts')' returned non-zero exit status 255.\", \"error_detail\": \"ssh: connect to host 172.30.0.11 port 22: No route to host\"}\n{\"asset_id\": \"H1\", \"role\": \"server\", \"collected_at\": \"2026-11-10T14:37:14.550623+00:00\", \"source\": {\"kind\": \"ssh_forced_facts_command\", \"schema_version\": 1}, \"os\": {\"PRETTY_NAME\": \"Debian GNU/Linux 12 (bookworm)\", \"NAME\": \"Debian GNU/Linux\", \"VERSION_ID\": \"12\", \"VERSION\": \"12 (bookworm)\", \"VERSION_CODENAME\": \"bookworm\", \"ID\": \"debian\", \"HOME_URL\": \"https://www.debian.org/\", \"SUPPORT_URL\": \"https://www.debian.org/support\", \"BUG_REPORT_URL\": \"https://bugs.debian.org/\"}, \"software\": [{\"product_id\": \"openssh\", \"component\": \"sshd\", \"package\": \"openssh-server\", \"package_version\": \"1:9.2p1-2+deb12u10\", \"binary_version\": \"OpenSSH_9.2, OpenSSL 3.0.22 25 Aug 2026\", \"running\": true}], \"configuration\": {\"ipv4_forwarding\": false, \"ssh_server\": {\"usepam\": \"no\", \"permitrootlogin\": \"forced-commands-only\", \"pubkeyauthentication\": \"yes\", \"passwordauthentication\": \"no\", \"x11forwarding\": \"no\", \"allowtcpforwarding\": \"no\", \"allowagentforwarding\": \"no\"}, \"ssh_client\": {\"user\": \"root\", \"destination\": \"172.30.20.20\", \"effective\": {\"canonicalizehostname\": \"false\", \"verifyhostkeydns\": \"false\", \"forwardagent\": \"no\"}}}, \"ipv4_routes\": [{\"dst\": \"default\", \"gateway\": \"172.30.20.1\", \"dev\": \"eth1\", \"flags\": []}, {\"dst\": \"172.30.0.0/24\", \"dev\": \"eth0\", \"protocol\": \"kernel\", \"scope\": \"link\", \"prefsrc\": \"172.30.0.12\", \"flags\": []}, {\"dst\": \"172.30.10.0/24\", \"gateway\": \"172.30.20.254\", \"dev\": \"eth1\", \"flags\": []}, {\"dst\": \"172.30.20.0/24\", \"dev\": \"eth1\", \"protocol\": \"kernel\", \"scope\": \"link\", \"prefsrc\": \"172.30.20.20\", \"flags\": []}], \"limitations\": [\"Package versions are distribution builds and may contain backported fixes.\", \"Only selected settings are collected; this is not a complete CVE assessment.\", \"OpenVPN is installed on R1/C1; the base lab does not start a VPN tunnel.\"], \"collection_status\": \"collected\", \"management_ip\": \"172.30.0.12\"}\n{\"asset_id\": \"C1\", \"role\": \"client\", \"collected_at\": \"2026-11-10T14:37:14.916256+00:00\", \"source\": {\"kind\": \"ssh_forced_facts_command\", \"schema_version\": 1}, \"os\": {\"PRETTY_NAME\": \"Debian GNU/Linux 12 (bookworm)\", \"NAME\": \"Debian GNU/Linux\", \"VERSION_ID\": \"12\", \"VERSION\": \"12 (bookworm)\", \"VERSION_CODENAME\": \"bookworm\", \"ID\": \"debian\", \"HOME_URL\": \"https://www.debian.org/\", \"SUPPORT_URL\": \"https://www.debian.org/support\", \"BUG_REPORT_URL\": \"https://bugs.debian.org/\"}, \"software\": [{\"product_id\": \"openssh\", \"component\": \"sshd\", \"package\": \"openssh-server\", \"package_version\": \"1:9.2p1-2+deb12u10\", \"binary_version\": \"OpenSSH_9.2, OpenSSL 3.0.22 25 Aug 2026\", \"running\": true}, {\"product_id\": \"openvpn\", \"package\": \"openvpn\", \"package_version\": \"2.6.14-0+deb12u2\", \"binary_version\": \"OpenVPN 2.6.14 x86_64-pc-linux-gnu [SSL (OpenSSL)] [LZO] [LZ4] [EPOLL] [PKCS11] [MH/PKTINFO] [AEAD] [DCO]\", \"running\": false}], \"configuration\": {\"ipv4_forwarding\": false, \"ssh_server\": {\"usepam\": \"no\", \"permitrootlogin\": \"forced-commands-only\", \"pubkeyauthentication\": \"yes\", \"passwordauthentication\": \"no\", \"x11forwarding\": \"no\", \"allowtcpforwarding\": \"no\", \"allowagentforwarding\": \"no\"}, \"ssh_client\": {\"user\": \"root\", \"destination\": \"172.30.20.20\", \"effective\": {\"canonicalizehostname\": \"false\", \"verifyhostkeydns\": \"false\", \"forwardagent\": \"no\"}}}, \"ipv4_routes\": [{\"dst\": \"default\", \"gateway\": \"172.30.10.1\", \"dev\": \"eth1\", \"flags\": []}, {\"dst\": \"172.30.0.0/24\", \"dev\": \"eth0\", \"protocol\": \"kernel\", \"scope\": \"link\", \"prefsrc\": \"172.30.0.13\", \"flags\": []}, {\"dst\": \"172.30.10.0/24\", \"dev\": \"eth1\", \"protocol\": \"kernel\", \"scope\": \"link\", \"prefsrc\": \"172.30.10.10\", \"flags\": []}, {\"dst\": \"172.30.20.0/24\", \"gateway\": \"172.30.10.254\", \"dev\": \"eth1\", \"flags\": []}], \"limitations\": [\"Package versions are distribution builds and may contain backported fixes.\", \"Only selected settings are collected; this is not a complete CVE assessment.\", \"OpenVPN is installed on R1/C1; the base lab does not start a VPN tunnel.\"], \"collection_status\": \"collected\", \"management_ip\": \"172.30.0.13\"}\n\n"
+    },
+    {
+      "id": "restart_router",
+      "command": "docker compose -f lab/compose.yaml start router",
+      "exit_code": 0,
+      "output": " Container netvuln-lab-keys-1 Starting \n Container netvuln-lab-keys-1 Started \n Container netvuln-lab-keys-1 Waiting \n Container netvuln-lab-keys-1 Exited \n Container netvuln-lab-router-1 Starting \n Container netvuln-lab-router-1 Started \n"
+    },
+    {
+      "id": "restored_data_path",
+      "command": "docker compose -f lab/compose.yaml exec -T client python3 /opt/lab/tools.py check",
+      "exit_code": 0,
+      "output": "PASS: route to 172.30.20.20 uses R1 (172.30.10.254)\nPING 172.30.20.20 (172.30.20.20) 56(84) bytes of data.\n64 bytes from 172.30.20.20: icmp_seq=1 ttl=63 time=0.098 ms\n64 bytes from 172.30.20.20: icmp_seq=2 ttl=63 time=0.085 ms\n\n--- 172.30.20.20 ping statistics ---\n2 packets transmitted, 2 received, 0% packet loss, time 1056ms\nrtt min/avg/max/mdev = 0.085/0.091/0.098/0.006 ms\n\ntraceroute to 172.30.20.20 (172.30.20.20), 3 hops max, 60 byte packets\n 1  172.30.10.254  0.063 ms  0.019 ms  0.016 ms\n 2  172.30.20.20  0.061 ms  0.027 ms  0.024 ms\n\nPASS: SSH across the routed lab network returned real H1 facts\n"
+    },
+    {
+      "id": "client_package_evidence",
+      "command": "docker compose -f lab/compose.yaml exec -T client dpkg-query -W '-f=${Package}\\t${Version}\\n' openssh-client",
+      "exit_code": 0,
+      "output": "openssh-client\t1:9.2p1-2+deb12u10\n"
+    },
+    {
+      "id": "stop_lab",
+      "command": "docker compose -f lab/compose.yaml stop",
+      "exit_code": 0,
+      "output": " Container netvuln-lab-client-1 Stopping \n Container netvuln-lab-client-1 Stopped \n Container netvuln-lab-server-1 Stopping \n Container netvuln-lab-server-1 Stopped \n Container netvuln-lab-router-1 Stopping \n Container netvuln-lab-router-1 Stopped \n Container netvuln-lab-keys-1 Stopping \n Container netvuln-lab-keys-1 Stopped \n"
+    }
+  ],
+  "checks": [
+    {
+      "id": "compose_config",
+      "passed": true
+    },
+    {
+      "id": "lab_started",
+      "passed": true
+    },
+    {
+      "id": "routed_path_and_ssh",
+      "passed": true
+    },
+    {
+      "id": "three_real_ssh_snapshots",
+      "passed": true
+    },
+    {
+      "id": "installed_vs_running",
+      "passed": true
+    },
+    {
+      "id": "live_config_change_observed",
+      "passed": true
+    },
+    {
+      "id": "config_restored_and_observed",
+      "passed": true
+    },
+    {
+      "id": "router_is_required_for_data_path",
+      "passed": true
+    },
+    {
+      "id": "unreachable_device_is_error_not_safe",
+      "passed": true
+    },
+    {
+      "id": "router_restart_restores_data_path",
+      "passed": true
+    },
+    {
+      "id": "lab_stopped_after_validation",
+      "passed": true
+    }
+  ],
+  "source_metadata": [
+    {
+      "i": 0,
+      "status": "fulfilled",
+      "value": {
+        "chunk_id": "2716cf",
+        "wall_time_seconds": 0.000017673,
+        "exit_code": 0,
+        "original_token_count": 123,
+        "output": "05d69bea36ba23ef49b0a693332b43ecfc8608f0d1ddcce3513d442733743fed  lab/compose.yaml\nd4e11ba14f51300ef2a4f9f7ececa02d4d4d03f3d48591860ac3e2a727958581  lab/Dockerfile\n698cb21c7a122bf71c83bd8828ae205a95ca2ff2409d66f0b9763638a4e04947  lab/tools.py\n1fe5e262ba1fe38c92065c195d61bb51fea961ae463d8e44bf9830f215d8c4c2  lab/entrypoint.sh\ndb75975c49eec8589eab37eaed09229f0c3fc9ffcff55782e8fe791600c597d7  lab/sshd_config\n920f2293306c4cb9806ed6128cda57c424d5876c287ce638c0c3fd0b1e507918  lab/init-keys.sh\n"
+      }
+    },
+    {
+      "i": 1,
+      "status": "fulfilled",
+      "value": {
+        "chunk_id": "1b3cbc",
+        "wall_time_seconds": 0.052598115,
+        "exit_code": 0,
+        "original_token_count": 299,
+        "output": "[{\"ID\":\"sha256:a23c4b116557fc4888ea4f5e8a2d53f32e4c0cc20016f8e1ec040c1341bceb84\",\"ContainerName\":\"netvuln-lab-keys-1\",\"Repository\":\"netvuln-lab-server\",\"Tag\":\"demo\",\"Platform\":\"linux/amd64\",\"Size\":201974658,\"Created\":\"2026-11-10T14:18:53.67407497Z\",\"LastTagTime\":\"2026-11-10T14:18:53.962768038Z\"},{\"ID\":\"sha256:a23c4b116557fc4888ea4f5e8a2d53f32e4c0cc20016f8e1ec040c1341bceb84\",\"ContainerName\":\"netvuln-lab-server-1\",\"Repository\":\"netvuln-lab-server\",\"Tag\":\"demo\",\"Platform\":\"linux/amd64\",\"Size\":201974658,\"Created\":\"2026-11-10T14:18:53.67407497Z\",\"LastTagTime\":\"2026-11-10T14:18:53.962768038Z\"},{\"ID\":\"sha256:947b7f3d530ea85ad1cf0b652de5888bdb711f92c00f2961e2b2ade5adc80bf7\",\"ContainerName\":\"netvuln-lab-router-1\",\"Repository\":\"netvuln-lab-router\",\"Tag\":\"demo\",\"Platform\":\"linux/amd64\",\"Size\":207242759,\"Created\":\"2026-11-10T14:18:57.140101599Z\",\"LastTagTime\":\"2026-11-10T14:18:57.50434413Z\"},{\"ID\":\"sha256:209055a737261ca246680e8a6457bf5ba43391ab771988f6d0ebba3b82bdb332\",\"ContainerName\":\"netvuln-lab-client-1\",\"Repository\":\"netvuln-lab-client\",\"Tag\":\"demo\",\"Platform\":\"linux/amd64\",\"Size\":207242759,\"Created\":\"2026-11-10T14:18:57.140101599Z\",\"LastTagTime\":\"2026-11-10T14:18:57.502947582Z\"}]\n\n"
+      }
+    },
+    {
+      "i": 2,
+      "status": "fulfilled",
+      "value": {
+        "chunk_id": "846528",
+        "wall_time_seconds": 0.000017142,
+        "exit_code": 0,
+        "original_token_count": 11,
+        "output": "aebca53d2b741f94724f660609f47775f9ffa3e6\n"
+      }
+    }
+  ],
+  "finished_at": "2026-11-10 14:38:33 UTC",
+  "all_checks_passed": true,
+  "not_tested": [
+    "HTTP collection endpoint and automatic snapshot ingestion into RAG",
+    "Automatic CVE applicability verdicts for asset snapshots",
+    "LLM-versus-RAG answer quality, citation support, and hallucination metrics",
+    "OpenVPN tunnel, certificates, and effective VPN configuration",
+    "The planned vulnerable/fixed upstream build matrix and exploit reproduction"
+  ]
+}

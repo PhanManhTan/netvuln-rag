@@ -1,0 +1,718 @@
+{
+  "schema_version": 1,
+  "created_at": "2026-11-14T17:14:49.840676+00:00",
+  "scope": "source_compilation_and_binary_version_only",
+  "manifest_sha256": "355e8e8570f00308dde42fee35c9d72cad6e19d90437faa034b8fef6f0bb9870",
+  "sources_lock_sha256": "7ab6669f1f9cb626d2af0a149bed8291617d49cadf915530f1a197e74ec590f6",
+  "expected_targets": 16,
+  "passed_targets": 16,
+  "full_matrix_passed": true,
+  "aws_deployment": "pending",
+  "cve_benchmark": "pending",
+  "results": [
+    {
+      "device_id": "FRR-A",
+      "status": "passed",
+      "exit_code": 0,
+      "image_id": "sha256:8c81265e6531178b40ff88680a09b3d65fb9a955f12bb090c44d6e3895ab2479",
+      "log": "FRR-A.log",
+      "completed_at": "2026-11-14T17:12:16.038061+00:00",
+      "build": {
+        "schema_version": 1,
+        "device_id": "FRR-A",
+        "product_id": "frr",
+        "expected_version": "8.5.2",
+        "source_sha256": "085408956bf875bb861646463f7e7634af90c194a888fac3bc8d1c70a57046c1",
+        "platform": {
+          "distribution": "ubuntu",
+          "release": "22.04",
+          "architecture": "x86_64"
+        },
+        "commands": [
+          [
+            "./bootstrap.sh"
+          ],
+          [
+            "./configure",
+            "--prefix=/opt/netvuln/products/frr/8.5.2",
+            "--sysconfdir=/etc/netvuln/frr",
+            "--localstatedir=/var/run/frr",
+            "--enable-user=root",
+            "--enable-group=root",
+            "--disable-doc",
+            "--disable-snmp",
+            "--disable-zeromq"
+          ],
+          [
+            "make",
+            "-j2"
+          ],
+          [
+            "make",
+            "install"
+          ]
+        ],
+        "observed_at": "2026-11-14T17:12:09.798356+00:00",
+        "binary": "/opt/netvuln/products/frr/8.5.2/sbin/bgpd",
+        "version": "8.5.2",
+        "binary_sha256": "decb775f9d15b97c6209b995f7e7ef9e2abe10f7950bb58f5a5dd29369aee5a8",
+        "version_output": "bgpd version 8.5.2\nCopyright 1996-2005 Kunihiro Ishiguro, et al.\nconfigured with:\n\t'--prefix=/opt/netvuln/products/frr/8.5.2' '--sysconfdir=/etc/netvuln/frr' '--localstatedir=/var/run/frr' '--enable-user=root' '--enable-group=root' '--disable-doc' '--disable-snmp' '--disable-zeromq' 'PKG_CONFIG_PATH=/opt/netvuln/products/libyang/2.1.128/lib/pkgconfig:/opt/netvuln/products/libyang/2.1.128/lib/x86_64-linux-gnu/pkgconfig' 'LIBS=-lyang'"
+      },
+      "record": "20261114T170642.678766Z/FRR-A.json"
+    },
+    {
+      "device_id": "FRR-B",
+      "status": "passed",
+      "exit_code": 0,
+      "image_id": "sha256:8c81265e6531178b40ff88680a09b3d65fb9a955f12bb090c44d6e3895ab2479",
+      "log": "FRR-B.log",
+      "completed_at": "2026-11-14T17:12:24.706264+00:00",
+      "build": {
+        "schema_version": 1,
+        "device_id": "FRR-B",
+        "product_id": "frr",
+        "expected_version": "9.0.1",
+        "source_sha256": "3a371ece41cdf334b070811287f6733acabbadb442c8e693f8b66ec517592db7",
+        "platform": {
+          "distribution": "ubuntu",
+          "release": "22.04",
+          "architecture": "x86_64"
+        },
+        "commands": [
+          [
+            "./bootstrap.sh"
+          ],
+          [
+            "./configure",
+            "--prefix=/opt/netvuln/products/frr/9.0.1",
+            "--sysconfdir=/etc/netvuln/frr",
+            "--localstatedir=/var/run/frr",
+            "--enable-user=root",
+            "--enable-group=root",
+            "--disable-doc",
+            "--disable-snmp",
+            "--disable-zeromq"
+          ],
+          [
+            "make",
+            "-j2"
+          ],
+          [
+            "make",
+            "install"
+          ]
+        ],
+        "observed_at": "2026-11-14T17:12:21.947429+00:00",
+        "binary": "/opt/netvuln/products/frr/9.0.1/sbin/bgpd",
+        "version": "9.0.1",
+        "binary_sha256": "c357608dc8b155816f93949231b3df72b5396daba9a3942e38364b4faa5b51e6",
+        "version_output": "bgpd version 9.0.1\nCopyright 1996-2005 Kunihiro Ishiguro, et al.\nconfigured with:\n\t'--prefix=/opt/netvuln/products/frr/9.0.1' '--sysconfdir=/etc/netvuln/frr' '--localstatedir=/var/run/frr' '--enable-user=root' '--enable-group=root' '--disable-doc' '--disable-snmp' '--disable-zeromq' 'PKG_CONFIG_PATH=/opt/netvuln/products/libyang/2.1.128/lib/pkgconfig:/opt/netvuln/products/libyang/2.1.128/lib/x86_64-linux-gnu/pkgconfig' 'LIBS=-lyang'"
+      },
+      "record": "20261114T170642.678766Z/FRR-B.json"
+    },
+    {
+      "device_id": "NGINX-A",
+      "status": "passed",
+      "exit_code": 0,
+      "image_id": "sha256:d4455de85fa5372ea441cf9c3e2156fadcc3191cd31a62edc4796a34b5e268e7",
+      "log": "NGINX-A.log",
+      "completed_at": "2026-11-14T16:20:06.904488+00:00",
+      "build": {
+        "schema_version": 1,
+        "device_id": "NGINX-A",
+        "product_id": "nginx",
+        "expected_version": "1.24.0",
+        "source_sha256": "77a2541637b92a621e3ee76776c8b7b40cf6d707e69ba53a940283e30ff2f55d",
+        "platform": {
+          "distribution": "ubuntu",
+          "release": "22.04",
+          "architecture": "x86_64"
+        },
+        "commands": [
+          [
+            "./configure",
+            "--prefix=/opt/netvuln/products/nginx/1.24.0",
+            "--with-http_ssl_module",
+            "--with-http_v2_module",
+            "--with-stream",
+            "--with-stream_ssl_module"
+          ],
+          [
+            "make",
+            "-j2"
+          ],
+          [
+            "make",
+            "install"
+          ]
+        ],
+        "observed_at": "2026-11-14T16:20:06.088290+00:00",
+        "binary": "/opt/netvuln/products/nginx/1.24.0/sbin/nginx",
+        "version": "1.24.0",
+        "binary_sha256": "3288df2f986ff4a3645fee622a466a9fed88ed7da73e36618c6fea184fcf922c",
+        "version_output": "nginx version: nginx/1.24.0"
+      },
+      "record": "NGINX-A.json"
+    },
+    {
+      "device_id": "NGINX-B",
+      "status": "passed",
+      "exit_code": 0,
+      "image_id": "sha256:d4455de85fa5372ea441cf9c3e2156fadcc3191cd31a62edc4796a34b5e268e7",
+      "log": "NGINX-B.log",
+      "completed_at": "2026-11-14T16:20:09.038821+00:00",
+      "build": {
+        "schema_version": 1,
+        "device_id": "NGINX-B",
+        "product_id": "nginx",
+        "expected_version": "1.26.2",
+        "source_sha256": "627fe086209bba80a2853a0add9d958d7ebbdffa1a8467a5784c9a6b4f03d738",
+        "platform": {
+          "distribution": "ubuntu",
+          "release": "22.04",
+          "architecture": "x86_64"
+        },
+        "commands": [
+          [
+            "./configure",
+            "--prefix=/opt/netvuln/products/nginx/1.26.2",
+            "--with-http_ssl_module",
+            "--with-http_v2_module",
+            "--with-stream",
+            "--with-stream_ssl_module"
+          ],
+          [
+            "make",
+            "-j2"
+          ],
+          [
+            "make",
+            "install"
+          ]
+        ],
+        "observed_at": "2026-11-14T16:20:08.493338+00:00",
+        "binary": "/opt/netvuln/products/nginx/1.26.2/sbin/nginx",
+        "version": "1.26.2",
+        "binary_sha256": "a219040dad3ec4023e22543b9e7e6be20671c5575e24cc91f9594dba011bcf36",
+        "version_output": "nginx version: nginx/1.26.2"
+      },
+      "record": "NGINX-B.json"
+    },
+    {
+      "device_id": "APACHE-A",
+      "status": "passed",
+      "exit_code": 0,
+      "image_id": "sha256:d4455de85fa5372ea441cf9c3e2156fadcc3191cd31a62edc4796a34b5e268e7",
+      "log": "APACHE-A.log",
+      "completed_at": "2026-11-14T16:15:55.527066+00:00",
+      "build": {
+        "schema_version": 1,
+        "device_id": "APACHE-A",
+        "product_id": "apache",
+        "expected_version": "2.4.49",
+        "source_sha256": "e76c3f2b002bd79f82ad1f0a1a14f6e838ad3f6f04f4a4b20d9454f7fc3e4c1c",
+        "platform": {
+          "distribution": "ubuntu",
+          "release": "22.04",
+          "architecture": "x86_64"
+        },
+        "commands": [
+          [
+            "./buildconf",
+            "--with-apr=/usr/bin/apr-1-config"
+          ],
+          [
+            "./configure",
+            "--prefix=/opt/netvuln/products/apache/2.4.49",
+            "--with-apr=/usr/bin/apr-1-config",
+            "--with-apr-util=/usr/bin/apu-1-config",
+            "--enable-so",
+            "--enable-ssl",
+            "--enable-proxy",
+            "--enable-proxy-http",
+            "--enable-rewrite",
+            "--with-mpm=event"
+          ],
+          [
+            "make",
+            "-j2"
+          ],
+          [
+            "make",
+            "install"
+          ]
+        ],
+        "observed_at": "2026-11-14T16:15:50.904294+00:00",
+        "binary": "/opt/netvuln/products/apache/2.4.49/bin/httpd",
+        "version": "2.4.49",
+        "binary_sha256": "b492ac9e73bef6472dc317595f3290ac854cd2ee4573f6b638df48431b899699",
+        "version_output": "Server version: Apache/2.4.49 (Unix)\nServer built:   Jan  1 2024 00:00:00"
+      },
+      "record": "APACHE-A.json"
+    },
+    {
+      "device_id": "APACHE-B",
+      "status": "passed",
+      "exit_code": 0,
+      "image_id": "sha256:d4455de85fa5372ea441cf9c3e2156fadcc3191cd31a62edc4796a34b5e268e7",
+      "log": "APACHE-B.log",
+      "completed_at": "2026-11-14T16:15:56.672438+00:00",
+      "build": {
+        "schema_version": 1,
+        "device_id": "APACHE-B",
+        "product_id": "apache",
+        "expected_version": "2.4.50",
+        "source_sha256": "1ac489de6ec0d3e7b07ed1b2104303e57ebfd19889797c50a5798d77e1160a06",
+        "platform": {
+          "distribution": "ubuntu",
+          "release": "22.04",
+          "architecture": "x86_64"
+        },
+        "commands": [
+          [
+            "./buildconf",
+            "--with-apr=/usr/bin/apr-1-config"
+          ],
+          [
+            "./configure",
+            "--prefix=/opt/netvuln/products/apache/2.4.50",
+            "--with-apr=/usr/bin/apr-1-config",
+            "--with-apr-util=/usr/bin/apu-1-config",
+            "--enable-so",
+            "--enable-ssl",
+            "--enable-proxy",
+            "--enable-proxy-http",
+            "--enable-rewrite",
+            "--with-mpm=event"
+          ],
+          [
+            "make",
+            "-j2"
+          ],
+          [
+            "make",
+            "install"
+          ]
+        ],
+        "observed_at": "2026-11-14T16:15:51.729042+00:00",
+        "binary": "/opt/netvuln/products/apache/2.4.50/bin/httpd",
+        "version": "2.4.50",
+        "binary_sha256": "fec09ea57959361bd2612806632c558f9142a06e476aa81a38e499253909edcb",
+        "version_output": "Server version: Apache/2.4.50 (Unix)\nServer built:   Jan  1 2024 00:00:00"
+      },
+      "record": "APACHE-B.json"
+    },
+    {
+      "device_id": "BIND-A",
+      "status": "passed",
+      "exit_code": 0,
+      "image_id": "sha256:d4455de85fa5372ea441cf9c3e2156fadcc3191cd31a62edc4796a34b5e268e7",
+      "log": "BIND-A.log",
+      "completed_at": "2026-11-14T16:18:00.405543+00:00",
+      "build": {
+        "schema_version": 1,
+        "device_id": "BIND-A",
+        "product_id": "bind",
+        "expected_version": "9.18.19",
+        "source_sha256": "115e09c05439bebade1d272eda08fa88eb3b60129edef690588c87a4d27612cc",
+        "platform": {
+          "distribution": "ubuntu",
+          "release": "22.04",
+          "architecture": "x86_64"
+        },
+        "commands": [
+          [
+            "./configure",
+            "--prefix=/opt/netvuln/products/bind/9.18.19",
+            "--without-gssapi",
+            "--disable-doh",
+            "--disable-linux-caps"
+          ],
+          [
+            "make",
+            "-j2"
+          ],
+          [
+            "make",
+            "install"
+          ]
+        ],
+        "observed_at": "2026-11-14T16:17:59.784014+00:00",
+        "binary": "/opt/netvuln/products/bind/9.18.19/sbin/named",
+        "version": "9.18.19",
+        "binary_sha256": "c56ba80236569cf31a5b8e935175187d4205de22d8dac5d2c420bae4779696a6",
+        "version_output": "BIND 9.18.19 (Extended Support Version) <id:c78cd36>"
+      },
+      "record": "BIND-A.json"
+    },
+    {
+      "device_id": "BIND-B",
+      "status": "passed",
+      "exit_code": 0,
+      "image_id": "sha256:d4455de85fa5372ea441cf9c3e2156fadcc3191cd31a62edc4796a34b5e268e7",
+      "log": "BIND-B.log",
+      "completed_at": "2026-11-14T16:17:59.871931+00:00",
+      "build": {
+        "schema_version": 1,
+        "device_id": "BIND-B",
+        "product_id": "bind",
+        "expected_version": "9.18.24",
+        "source_sha256": "709d73023c9115ddad3bab65b6c8c79a590196d0d114f5d0ca2533dbd52ddf66",
+        "platform": {
+          "distribution": "ubuntu",
+          "release": "22.04",
+          "architecture": "x86_64"
+        },
+        "commands": [
+          [
+            "./configure",
+            "--prefix=/opt/netvuln/products/bind/9.18.24",
+            "--without-gssapi",
+            "--disable-doh",
+            "--disable-linux-caps"
+          ],
+          [
+            "make",
+            "-j2"
+          ],
+          [
+            "make",
+            "install"
+          ]
+        ],
+        "observed_at": "2026-11-14T16:17:57.834726+00:00",
+        "binary": "/opt/netvuln/products/bind/9.18.24/sbin/named",
+        "version": "9.18.24",
+        "binary_sha256": "52bf382a86faf2bee794d8857a94d9b8d42e2ce961378f5a2b2b18b238b3e954",
+        "version_output": "BIND 9.18.24 (Extended Support Version) <id:6d7674f>"
+      },
+      "record": "BIND-B.json"
+    },
+    {
+      "device_id": "OPENVPN-A",
+      "status": "passed",
+      "exit_code": 0,
+      "image_id": "sha256:8c81265e6531178b40ff88680a09b3d65fb9a955f12bb090c44d6e3895ab2479",
+      "log": "OPENVPN-A.log",
+      "completed_at": "2026-11-14T17:04:43.683275+00:00",
+      "build": {
+        "schema_version": 1,
+        "device_id": "OPENVPN-A",
+        "product_id": "openvpn",
+        "expected_version": "2.6.8",
+        "source_sha256": "5ede1565c8a6d880100f7f235317a7ee9eea83d5052db5547f13a9e76af7805d",
+        "platform": {
+          "distribution": "ubuntu",
+          "release": "22.04",
+          "architecture": "x86_64"
+        },
+        "commands": [
+          [
+            "./configure",
+            "--prefix=/opt/netvuln/products/openvpn/2.6.8",
+            "--disable-dco"
+          ],
+          [
+            "make",
+            "-j2"
+          ],
+          [
+            "make",
+            "install"
+          ]
+        ],
+        "observed_at": "2026-11-14T17:04:42.230057+00:00",
+        "binary": "/opt/netvuln/products/openvpn/2.6.8/sbin/openvpn",
+        "version": "2.6.8",
+        "binary_sha256": "727ee3c5d9b27838511ce29f6ee2a73b280edd421af67f21e0a36be8481dc813",
+        "version_output": "OpenVPN 2.6.8 x86_64-pc-linux-gnu [SSL (OpenSSL)] [LZO] [LZ4] [EPOLL] [MH/PKTINFO] [AEAD]\nlibrary versions: OpenSSL 3.0.2 15 Mar 2022, LZO 2.10\nOriginally developed by James Yonan\nCopyright (C) 2002-2023 OpenVPN Inc <sales@openvpn.net>\nCompile time defines: enable_async_push=no enable_comp_stub=no enable_crypto_ofb_cfb=yes enable_dco=no enable_debug=yes enable_dlopen=unknown enable_dlopen_self=unknown enable_dlopen_self_static=unknown enable_fast_install=needless enable_fragment=yes enable_iproute2=no enable_libtool_lock=yes enable_lz4=yes enable_lzo=yes enable_management=yes enable_pam_dlopen=no enable_pedantic=no enable_pkcs11=no enable_plugin_auth_pam=yes enable_plugin_down_root=yes enable_plugins=yes enable_port_share=yes enable_selinux=no enable_shared=yes enable_shared_with_static_runtimes=no enable_small=no enable_static=yes enable_strict=no enable_strict_options=no enable_systemd=no enable_werror=no enable_win32_dll=yes enable_wolfssl_options_h=yes enable_x509_alt_username=no with_aix_soname=aix with_crypto_library=openssl with_gnu_ld=yes with_mem_check=no with_openssl_engine=auto with_sysroot=no"
+      },
+      "record": "20261114T170401.097565Z/OPENVPN-A.json"
+    },
+    {
+      "device_id": "OPENVPN-B",
+      "status": "passed",
+      "exit_code": 0,
+      "image_id": "sha256:8c81265e6531178b40ff88680a09b3d65fb9a955f12bb090c44d6e3895ab2479",
+      "log": "OPENVPN-B.log",
+      "completed_at": "2026-11-14T17:04:43.678301+00:00",
+      "build": {
+        "schema_version": 1,
+        "device_id": "OPENVPN-B",
+        "product_id": "openvpn",
+        "expected_version": "2.6.10",
+        "source_sha256": "1993bbb7b9edb430626eaa24573f881fd3df642f427fcb824b1aed1fca1bcc9b",
+        "platform": {
+          "distribution": "ubuntu",
+          "release": "22.04",
+          "architecture": "x86_64"
+        },
+        "commands": [
+          [
+            "./configure",
+            "--prefix=/opt/netvuln/products/openvpn/2.6.10",
+            "--disable-dco"
+          ],
+          [
+            "make",
+            "-j2"
+          ],
+          [
+            "make",
+            "install"
+          ]
+        ],
+        "observed_at": "2026-11-14T17:04:42.391178+00:00",
+        "binary": "/opt/netvuln/products/openvpn/2.6.10/sbin/openvpn",
+        "version": "2.6.10",
+        "binary_sha256": "283dabcd0a09068e794d49a4a92e8968ebf0057c7b8d907fcbd392b3c14ddde8",
+        "version_output": "OpenVPN 2.6.10 x86_64-pc-linux-gnu [SSL (OpenSSL)] [LZO] [LZ4] [EPOLL] [MH/PKTINFO] [AEAD]\nlibrary versions: OpenSSL 3.0.2 15 Mar 2022, LZO 2.10\nOriginally developed by James Yonan\nCopyright (C) 2002-2024 OpenVPN Inc <sales@openvpn.net>\nCompile time defines: enable_async_push=no enable_comp_stub=no enable_crypto_ofb_cfb=yes enable_dco=no enable_debug=yes enable_dlopen=unknown enable_dlopen_self=unknown enable_dlopen_self_static=unknown enable_fast_install=needless enable_fragment=yes enable_iproute2=no enable_libtool_lock=yes enable_lz4=yes enable_lzo=yes enable_management=yes enable_pam_dlopen=no enable_pedantic=no enable_pkcs11=no enable_plugin_auth_pam=yes enable_plugin_down_root=yes enable_plugins=yes enable_port_share=yes enable_selinux=no enable_shared=yes enable_shared_with_static_runtimes=no enable_small=no enable_static=yes enable_strict=no enable_strict_options=no enable_systemd=no enable_werror=no enable_win32_dll=yes enable_wolfssl_options_h=yes enable_x509_alt_username=no with_aix_soname=aix with_crypto_library=openssl with_gnu_ld=yes with_mem_check=no with_openssl_engine=auto with_sysroot=no"
+      },
+      "record": "20261114T170401.097565Z/OPENVPN-B.json"
+    },
+    {
+      "device_id": "OPENSSH-A",
+      "status": "passed",
+      "exit_code": 0,
+      "image_id": "sha256:d4455de85fa5372ea441cf9c3e2156fadcc3191cd31a62edc4796a34b5e268e7",
+      "log": "OPENSSH-A.log",
+      "completed_at": "2026-11-14T16:21:14.624095+00:00",
+      "build": {
+        "schema_version": 1,
+        "device_id": "OPENSSH-A",
+        "product_id": "openssh",
+        "expected_version": "9.6p1",
+        "source_sha256": "910211c07255a8c5ad654391b40ee59800710dd8119dd5362de09385aa7a777c",
+        "platform": {
+          "distribution": "ubuntu",
+          "release": "22.04",
+          "architecture": "x86_64"
+        },
+        "commands": [
+          [
+            "./configure",
+            "--prefix=/opt/netvuln/products/openssh/9.6p1",
+            "--sysconfdir=/etc/netvuln/openssh",
+            "--with-privsep-path=/run/sshd",
+            "--with-pam"
+          ],
+          [
+            "make",
+            "-j2"
+          ],
+          [
+            "make",
+            "install"
+          ]
+        ],
+        "observed_at": "2026-11-14T16:21:13.428195+00:00",
+        "binary": "/opt/netvuln/products/openssh/9.6p1/sbin/sshd",
+        "version": "9.6p1",
+        "binary_sha256": "94db4dda02d9f01d11aa5c0cea4eab37d5e6fba294a427cb62f86145b9e374aa",
+        "version_output": "OpenSSH_9.6p1, OpenSSL 3.0.2 15 Mar 2022"
+      },
+      "record": "OPENSSH-A.json"
+    },
+    {
+      "device_id": "OPENSSH-B",
+      "status": "passed",
+      "exit_code": 0,
+      "image_id": "sha256:d4455de85fa5372ea441cf9c3e2156fadcc3191cd31a62edc4796a34b5e268e7",
+      "log": "OPENSSH-B.log",
+      "completed_at": "2026-11-14T16:21:15.678921+00:00",
+      "build": {
+        "schema_version": 1,
+        "device_id": "OPENSSH-B",
+        "product_id": "openssh",
+        "expected_version": "9.7p1",
+        "source_sha256": "490426f766d82a2763fcacd8d83ea3d70798750c7bd2aff2e57dc5660f773ffd",
+        "platform": {
+          "distribution": "ubuntu",
+          "release": "22.04",
+          "architecture": "x86_64"
+        },
+        "commands": [
+          [
+            "./configure",
+            "--prefix=/opt/netvuln/products/openssh/9.7p1",
+            "--sysconfdir=/etc/netvuln/openssh",
+            "--with-privsep-path=/run/sshd",
+            "--with-pam"
+          ],
+          [
+            "make",
+            "-j2"
+          ],
+          [
+            "make",
+            "install"
+          ]
+        ],
+        "observed_at": "2026-11-14T16:21:15.394298+00:00",
+        "binary": "/opt/netvuln/products/openssh/9.7p1/sbin/sshd",
+        "version": "9.7p1",
+        "binary_sha256": "a9a480e15a18f79b0710b65a9eeda2db1e97f06c53512ce9edbe69a672470511",
+        "version_output": "OpenSSH_9.7p1, OpenSSL 3.0.2 15 Mar 2022"
+      },
+      "record": "OPENSSH-B.json"
+    },
+    {
+      "device_id": "HAPROXY-A",
+      "status": "passed",
+      "exit_code": 0,
+      "image_id": "sha256:d4455de85fa5372ea441cf9c3e2156fadcc3191cd31a62edc4796a34b5e268e7",
+      "log": "HAPROXY-A.log",
+      "completed_at": "2026-11-14T16:19:29.611232+00:00",
+      "build": {
+        "schema_version": 1,
+        "device_id": "HAPROXY-A",
+        "product_id": "haproxy",
+        "expected_version": "2.8.0",
+        "source_sha256": "61cdafb5db7e9174d0757b8e4bcde938352306fb7cc8ff2b5f55c26dd48a6cf7",
+        "platform": {
+          "distribution": "ubuntu",
+          "release": "22.04",
+          "architecture": "x86_64"
+        },
+        "commands": [
+          [
+            "make",
+            "-j2",
+            "TARGET=linux-glibc",
+            "USE_OPENSSL=1",
+            "USE_ZLIB=1",
+            "USE_PCRE2=1"
+          ],
+          [
+            "make",
+            "install",
+            "PREFIX=/opt/netvuln/products/haproxy/2.8.0"
+          ]
+        ],
+        "observed_at": "2026-11-14T16:19:28.014982+00:00",
+        "binary": "/opt/netvuln/products/haproxy/2.8.0/sbin/haproxy",
+        "version": "2.8.0",
+        "binary_sha256": "ded64ba1adedbcc3eaec91ecc0bbea1f5387f84bc66e179b0d1f62d4d3420444",
+        "version_output": "HAProxy version 2.8.0-fdd8154 2023/05/31 - https://haproxy.org/\nStatus: long-term supported branch - will stop receiving fixes around Q2 2028.\nKnown bugs: http://www.haproxy.org/bugs/bugs-2.8.0.html\nRunning on: Linux 6.8.0-1070-azure #78~22.04.1-Ubuntu SMP Thu Sep 24 18:46:45 UTC 2026 x86_64"
+      },
+      "record": "HAPROXY-A.json"
+    },
+    {
+      "device_id": "HAPROXY-B",
+      "status": "passed",
+      "exit_code": 0,
+      "image_id": "sha256:d4455de85fa5372ea441cf9c3e2156fadcc3191cd31a62edc4796a34b5e268e7",
+      "log": "HAPROXY-B.log",
+      "completed_at": "2026-11-14T16:19:30.292934+00:00",
+      "build": {
+        "schema_version": 1,
+        "device_id": "HAPROXY-B",
+        "product_id": "haproxy",
+        "expected_version": "2.8.9",
+        "source_sha256": "7a821478f36f847607f51a51e80f4f890c37af4811d60438e7f63783f67592ff",
+        "platform": {
+          "distribution": "ubuntu",
+          "release": "22.04",
+          "architecture": "x86_64"
+        },
+        "commands": [
+          [
+            "make",
+            "-j2",
+            "TARGET=linux-glibc",
+            "USE_OPENSSL=1",
+            "USE_ZLIB=1",
+            "USE_PCRE2=1"
+          ],
+          [
+            "make",
+            "install",
+            "PREFIX=/opt/netvuln/products/haproxy/2.8.9"
+          ]
+        ],
+        "observed_at": "2026-11-14T16:19:29.794710+00:00",
+        "binary": "/opt/netvuln/products/haproxy/2.8.9/sbin/haproxy",
+        "version": "2.8.9",
+        "binary_sha256": "0ad3eef33a2997cd2d66677840cab07c25b5987e8317240ed11e44be1756d4fd",
+        "version_output": "HAProxy version 2.8.9-1842fd0 2024/04/05 - https://haproxy.org/\nStatus: long-term supported branch - will stop receiving fixes around Q2 2028.\nKnown bugs: http://www.haproxy.org/bugs/bugs-2.8.9.html\nRunning on: Linux 6.8.0-1070-azure #78~22.04.1-Ubuntu SMP Thu Sep 24 18:46:45 UTC 2026 x86_64"
+      },
+      "record": "HAPROXY-B.json"
+    },
+    {
+      "device_id": "DNSMASQ-A",
+      "status": "passed",
+      "exit_code": 0,
+      "image_id": "sha256:d4455de85fa5372ea441cf9c3e2156fadcc3191cd31a62edc4796a34b5e268e7",
+      "log": "DNSMASQ-A.log",
+      "completed_at": "2026-11-14T16:18:19.132978+00:00",
+      "build": {
+        "schema_version": 1,
+        "device_id": "DNSMASQ-A",
+        "product_id": "dnsmasq",
+        "expected_version": "2.86",
+        "source_sha256": "28d52cfc9e2004ac4f85274f52b32e1647b4dbc9761b82e7de1e41c49907eb08",
+        "platform": {
+          "distribution": "ubuntu",
+          "release": "22.04",
+          "architecture": "x86_64"
+        },
+        "commands": [
+          [
+            "make",
+            "-j2",
+            "COPTS=-DHAVE_DNSSEC"
+          ],
+          [
+            "make",
+            "install",
+            "PREFIX=/opt/netvuln/products/dnsmasq/2.86"
+          ]
+        ],
+        "observed_at": "2026-11-14T16:18:18.854140+00:00",
+        "binary": "/opt/netvuln/products/dnsmasq/2.86/sbin/dnsmasq",
+        "version": "2.86",
+        "binary_sha256": "4f9435fe83ec60eff6f97aecfa10e425be22a8b8380854d2b4ed42c2aba52ccb",
+        "version_output": "Dnsmasq version 2.86  Copyright (c) 2000-2021 Simon Kelley\nCompile time options: IPv6 GNU-getopt no-DBus no-UBus no-i18n no-IDN DHCP DHCPv6 no-Lua TFTP no-conntrack ipset auth no-cryptohash no-DNSSEC loop-detect inotify dumpfile\n\nThis software comes with ABSOLUTELY NO WARRANTY.\nDnsmasq is free software, and you are welcome to redistribute it\nunder the terms of the GNU General Public License, version 2 or 3."
+      },
+      "record": "DNSMASQ-A.json"
+    },
+    {
+      "device_id": "DNSMASQ-B",
+      "status": "passed",
+      "exit_code": 0,
+      "image_id": "sha256:d4455de85fa5372ea441cf9c3e2156fadcc3191cd31a62edc4796a34b5e268e7",
+      "log": "DNSMASQ-B.log",
+      "completed_at": "2026-11-14T16:18:20.740196+00:00",
+      "build": {
+        "schema_version": 1,
+        "device_id": "DNSMASQ-B",
+        "product_id": "dnsmasq",
+        "expected_version": "2.90",
+        "source_sha256": "8e50309bd837bfec9649a812e066c09b6988b73d749b7d293c06c57d46a109e4",
+        "platform": {
+          "distribution": "ubuntu",
+          "release": "22.04",
+          "architecture": "x86_64"
+        },
+        "commands": [
+          [
+            "make",
+            "-j2",
+            "COPTS=-DHAVE_DNSSEC"
+          ],
+          [
+            "make",
+            "install",
+            "PREFIX=/opt/netvuln/products/dnsmasq/2.90"
+          ]
+        ],
+        "observed_at": "2026-11-14T16:18:20.162756+00:00",
+        "binary": "/opt/netvuln/products/dnsmasq/2.90/sbin/dnsmasq",
+        "version": "2.90",
+        "binary_sha256": "f56db7514887cb114f1b7abcdda718f05a6bfceb7017b8b6ce4adfbcc5d449ab",
+        "version_output": "Dnsmasq version 2.90  Copyright (c) 2000-2024 Simon Kelley\nCompile time options: IPv6 GNU-getopt no-DBus no-UBus no-i18n no-IDN DHCP DHCPv6 no-Lua TFTP no-conntrack ipset no-nftset auth no-cryptohash no-DNSSEC loop-detect inotify dumpfile\n\nThis software comes with ABSOLUTELY NO WARRANTY.\nDnsmasq is free software, and you are welcome to redistribute it\nunder the terms of the GNU General Public License, version 2 or 3."
+      },
+      "record": "DNSMASQ-B.json"
+    }
+  ]
+}

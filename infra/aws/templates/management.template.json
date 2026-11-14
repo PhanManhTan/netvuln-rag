@@ -1,0 +1,211 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "NetVuln management: prepare the Ansible control node or SSH target, then signal base readiness",
+  "Parameters": {
+    "ArtifactsBucket": {
+      "Type": "String",
+      "AllowedPattern": "[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]"
+    },
+    "ArtifactsPrefix": {
+      "Type": "String",
+      "AllowedPattern": "[a-zA-Z0-9][a-zA-Z0-9/_-]*"
+    },
+    "BundleSha256": {
+      "Type": "String",
+      "AllowedPattern": "[a-f0-9]{64}"
+    },
+    "AmiId": {
+      "Type": "AWS::EC2::Image::Id"
+    },
+    "InstanceType": {
+      "Type": "String",
+      "Default": "t3.medium",
+      "AllowedValues": [
+        "t3.small",
+        "t3.medium",
+        "t3.large",
+        "t3.xlarge",
+        "m6i.large",
+        "m6i.xlarge"
+      ]
+    },
+    "SubnetId": {
+      "Type": "AWS::EC2::Subnet::Id"
+    },
+    "SecurityGroupId": {
+      "Type": "AWS::EC2::SecurityGroup::Id"
+    },
+    "FleetId": {
+      "Type": "String",
+      "AllowedPattern": "[a-zA-Z][a-zA-Z0-9-]{0,99}"
+    }
+  },
+  "Resources": {
+    "Role": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "ec2.amazonaws.com"
+                ]
+              },
+              "Action": [
+                "sts:AssumeRole"
+              ]
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          {
+            "Fn::Sub": "arn:${AWS::Partition}:iam::aws:policy/AmazonSSMManagedInstanceCore"
+          }
+        ],
+        "Policies": [
+          {
+            "PolicyName": "ExperimentBootstrap",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:s3:::${ArtifactsBucket}/${ArtifactsPrefix}/bundle.tar.gz"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "cloudformation:SignalResource"
+                  ],
+                  "Resource": {
+                    "Ref": "AWS::StackId"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:PutObject"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:s3:::${ArtifactsBucket}/${ArtifactsPrefix}/ssh-known-hosts"
+                    },
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:s3:::${ArtifactsBucket}/${ArtifactsPrefix}/pki/*"
+                    },
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:s3:::${ArtifactsBucket}/${ArtifactsPrefix}/runs/*"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "Profile": {
+      "Type": "AWS::IAM::InstanceProfile",
+      "Properties": {
+        "Roles": [
+          {
+            "Ref": "Role"
+          }
+        ]
+      }
+    },
+    "Node": {
+      "Type": "AWS::EC2::Instance",
+      "Properties": {
+        "ImageId": {
+          "Ref": "AmiId"
+        },
+        "InstanceType": {
+          "Ref": "InstanceType"
+        },
+        "IamInstanceProfile": {
+          "Ref": "Profile"
+        },
+        "SubnetId": {
+          "Ref": "SubnetId"
+        },
+        "SecurityGroupIds": [
+          {
+            "Ref": "SecurityGroupId"
+          }
+        ],
+        "PrivateIpAddress": "10.53.0.10",
+        "SourceDestCheck": true,
+        "MetadataOptions": {
+          "HttpTokens": "required",
+          "HttpEndpoint": "enabled"
+        },
+        "BlockDeviceMappings": [
+          {
+            "DeviceName": "/dev/sda1",
+            "Ebs": {
+              "VolumeSize": 30,
+              "VolumeType": "gp3",
+              "Encrypted": true,
+              "DeleteOnTermination": true
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "NetVulnFleet",
+            "Value": {
+              "Ref": "FleetId"
+            }
+          },
+          {
+            "Key": "NetVulnRole",
+            "Value": "management"
+          },
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${FleetId}-MGMT"
+            }
+          }
+        ],
+        "UserData": {
+          "Fn::Base64": {
+            "Fn::Sub": "#!/bin/bash\nset -euo pipefail\numask 077\nexport DEBIAN_FRONTEND=noninteractive\nexport AWS_DEFAULT_REGION='${AWS::Region}'\nsignal_result() {\n  result=$?\n  trap - EXIT\n  if command -v aws >/dev/null; then\n    status=FAILURE\n    if [ \"$result\" -eq 0 ]; then status=SUCCESS; fi\n    aws cloudformation signal-resource --stack-name '${AWS::StackName}' --logical-resource-id Node --status \"$status\" || exit 1\n  fi\n  exit \"$result\"\n}\ntrap signal_result EXIT\napt-get update\napt-get install -y --no-install-recommends awscli ca-certificates python3 python3-venv\ninstall -d -m 0755 /opt/netvuln /opt/netvuln/repo\nmkdir -p /etc/netvuln\naws s3 cp 's3://${ArtifactsBucket}/${ArtifactsPrefix}/bundle.tar.gz' /opt/netvuln/bundle.tar.gz --only-show-errors\nprintf '%s  %s\\n' '${BundleSha256}' /opt/netvuln/bundle.tar.gz | sha256sum --check --strict\ntar --extract --gzip --file /opt/netvuln/bundle.tar.gz --directory /opt/netvuln/repo --no-same-owner\nfind /opt/netvuln/repo -type d -exec chmod 0755 {} +\ncat > /etc/netvuln/bootstrap.json <<'NETVULN_CONFIG'\n{\"kind\": \"management\", \"artifacts_bucket\": \"${ArtifactsBucket}\", \"artifacts_prefix\": \"${ArtifactsPrefix}\", \"region\": \"${AWS::Region}\", \"fleet_id\": \"${FleetId}\"}\nNETVULN_CONFIG\ncd /opt/netvuln/repo\npython3 -m infra.aws.bootstrap --config /etc/netvuln/bootstrap.json\n"
+          }
+        }
+      },
+      "CreationPolicy": {
+        "ResourceSignal": {
+          "Count": 1,
+          "Timeout": "PT120M"
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "InstanceId": {
+      "Value": {
+        "Ref": "Node"
+      }
+    },
+    "PrivateIp": {
+      "Value": {
+        "Fn::GetAtt": [
+          "Node",
+          "PrivateIp"
+        ]
+      }
+    }
+  }
+}

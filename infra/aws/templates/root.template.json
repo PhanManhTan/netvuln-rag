@@ -1,0 +1,1120 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Complete NetVuln sixteen-version experiment: CloudFormation infrastructure, agentless Ansible install/facts and functional readiness",
+  "Parameters": {
+    "ArtifactsBucket": {
+      "Type": "String",
+      "AllowedPattern": "[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]"
+    },
+    "ArtifactsPrefix": {
+      "Type": "String",
+      "AllowedPattern": "[a-zA-Z0-9][a-zA-Z0-9/_-]*"
+    },
+    "BundleSha256": {
+      "Type": "String",
+      "AllowedPattern": "[a-f0-9]{64}"
+    },
+    "FleetId": {
+      "Type": "String",
+      "AllowedPattern": "[a-zA-Z][a-zA-Z0-9-]{0,99}"
+    },
+    "AmiId": {
+      "Type": "AWS::EC2::Image::Id",
+      "Description": "Pinned Canonical Ubuntu Server 22.04 x86_64 AMI in this Region"
+    },
+    "ControlAmiId": {
+      "Type": "AWS::EC2::Image::Id",
+      "Description": "Pinned Canonical Ubuntu Server 24.04 x86_64 AMI for Ansible/Python 3.12 control node"
+    },
+    "TargetInstanceType": {
+      "Type": "String",
+      "Default": "t3.medium",
+      "AllowedValues": [
+        "t3.small",
+        "t3.medium",
+        "t3.large",
+        "t3.xlarge",
+        "m6i.large",
+        "m6i.xlarge"
+      ]
+    },
+    "ManagementInstanceType": {
+      "Type": "String",
+      "Default": "t3.large",
+      "AllowedValues": [
+        "t3.small",
+        "t3.medium",
+        "t3.large",
+        "t3.xlarge",
+        "m6i.large",
+        "m6i.xlarge"
+      ]
+    }
+  },
+  "Resources": {
+    "Network": {
+      "Type": "AWS::CloudFormation::Stack",
+      "Properties": {
+        "TemplateURL": {
+          "Fn::Sub": "https://${ArtifactsBucket}.s3.${AWS::Region}.${AWS::URLSuffix}/${ArtifactsPrefix}/templates/network.template.json"
+        },
+        "Parameters": {},
+        "TimeoutInMinutes": 150
+      }
+    },
+    "Management": {
+      "Type": "AWS::CloudFormation::Stack",
+      "Properties": {
+        "TemplateURL": {
+          "Fn::Sub": "https://${ArtifactsBucket}.s3.${AWS::Region}.${AWS::URLSuffix}/${ArtifactsPrefix}/templates/management.template.json"
+        },
+        "Parameters": {
+          "ArtifactsBucket": {
+            "Ref": "ArtifactsBucket"
+          },
+          "ArtifactsPrefix": {
+            "Ref": "ArtifactsPrefix"
+          },
+          "BundleSha256": {
+            "Ref": "BundleSha256"
+          },
+          "AmiId": {
+            "Ref": "ControlAmiId"
+          },
+          "FleetId": {
+            "Ref": "FleetId"
+          },
+          "InstanceType": {
+            "Ref": "ManagementInstanceType"
+          },
+          "SubnetId": {
+            "Fn::GetAtt": [
+              "Network",
+              "Outputs.ManagementSubnetId"
+            ]
+          },
+          "SecurityGroupId": {
+            "Fn::GetAtt": [
+              "Network",
+              "Outputs.ManagementSecurityGroup"
+            ]
+          }
+        },
+        "TimeoutInMinutes": 150
+      }
+    },
+    "FRRA": {
+      "Type": "AWS::CloudFormation::Stack",
+      "Properties": {
+        "TemplateURL": {
+          "Fn::Sub": "https://${ArtifactsBucket}.s3.${AWS::Region}.${AWS::URLSuffix}/${ArtifactsPrefix}/templates/target.template.json"
+        },
+        "Parameters": {
+          "ArtifactsBucket": {
+            "Ref": "ArtifactsBucket"
+          },
+          "ArtifactsPrefix": {
+            "Ref": "ArtifactsPrefix"
+          },
+          "BundleSha256": {
+            "Ref": "BundleSha256"
+          },
+          "AmiId": {
+            "Ref": "AmiId"
+          },
+          "FleetId": {
+            "Ref": "FleetId"
+          },
+          "InstanceType": {
+            "Ref": "TargetInstanceType"
+          },
+          "DeviceId": "FRR-A",
+          "DeviceKey": "FRRA",
+          "SubnetId": {
+            "Fn::GetAtt": [
+              "Network",
+              "Outputs.RouterSubnetId"
+            ]
+          },
+          "SecurityGroupId": {
+            "Fn::GetAtt": [
+              "Network",
+              "Outputs.FRRASecurityGroup"
+            ]
+          }
+        },
+        "TimeoutInMinutes": 150
+      },
+      "DependsOn": "Management"
+    },
+    "FRRB": {
+      "Type": "AWS::CloudFormation::Stack",
+      "Properties": {
+        "TemplateURL": {
+          "Fn::Sub": "https://${ArtifactsBucket}.s3.${AWS::Region}.${AWS::URLSuffix}/${ArtifactsPrefix}/templates/target.template.json"
+        },
+        "Parameters": {
+          "ArtifactsBucket": {
+            "Ref": "ArtifactsBucket"
+          },
+          "ArtifactsPrefix": {
+            "Ref": "ArtifactsPrefix"
+          },
+          "BundleSha256": {
+            "Ref": "BundleSha256"
+          },
+          "AmiId": {
+            "Ref": "AmiId"
+          },
+          "FleetId": {
+            "Ref": "FleetId"
+          },
+          "InstanceType": {
+            "Ref": "TargetInstanceType"
+          },
+          "DeviceId": "FRR-B",
+          "DeviceKey": "FRRB",
+          "SubnetId": {
+            "Fn::GetAtt": [
+              "Network",
+              "Outputs.RouterSubnetId"
+            ]
+          },
+          "SecurityGroupId": {
+            "Fn::GetAtt": [
+              "Network",
+              "Outputs.FRRBSecurityGroup"
+            ]
+          }
+        },
+        "TimeoutInMinutes": 150
+      },
+      "DependsOn": "Management"
+    },
+    "NGINXA": {
+      "Type": "AWS::CloudFormation::Stack",
+      "Properties": {
+        "TemplateURL": {
+          "Fn::Sub": "https://${ArtifactsBucket}.s3.${AWS::Region}.${AWS::URLSuffix}/${ArtifactsPrefix}/templates/target.template.json"
+        },
+        "Parameters": {
+          "ArtifactsBucket": {
+            "Ref": "ArtifactsBucket"
+          },
+          "ArtifactsPrefix": {
+            "Ref": "ArtifactsPrefix"
+          },
+          "BundleSha256": {
+            "Ref": "BundleSha256"
+          },
+          "AmiId": {
+            "Ref": "AmiId"
+          },
+          "FleetId": {
+            "Ref": "FleetId"
+          },
+          "InstanceType": {
+            "Ref": "TargetInstanceType"
+          },
+          "DeviceId": "NGINX-A",
+          "DeviceKey": "NGINXA",
+          "SubnetId": {
+            "Fn::GetAtt": [
+              "Network",
+              "Outputs.ServiceASubnetId"
+            ]
+          },
+          "SecurityGroupId": {
+            "Fn::GetAtt": [
+              "Network",
+              "Outputs.NGINXASecurityGroup"
+            ]
+          }
+        },
+        "TimeoutInMinutes": 150
+      },
+      "DependsOn": "Management"
+    },
+    "NGINXB": {
+      "Type": "AWS::CloudFormation::Stack",
+      "Properties": {
+        "TemplateURL": {
+          "Fn::Sub": "https://${ArtifactsBucket}.s3.${AWS::Region}.${AWS::URLSuffix}/${ArtifactsPrefix}/templates/target.template.json"
+        },
+        "Parameters": {
+          "ArtifactsBucket": {
+            "Ref": "ArtifactsBucket"
+          },
+          "ArtifactsPrefix": {
+            "Ref": "ArtifactsPrefix"
+          },
+          "BundleSha256": {
+            "Ref": "BundleSha256"
+          },
+          "AmiId": {
+            "Ref": "AmiId"
+          },
+          "FleetId": {
+            "Ref": "FleetId"
+          },
+          "InstanceType": {
+            "Ref": "TargetInstanceType"
+          },
+          "DeviceId": "NGINX-B",
+          "DeviceKey": "NGINXB",
+          "SubnetId": {
+            "Fn::GetAtt": [
+              "Network",
+              "Outputs.ServiceBSubnetId"
+            ]
+          },
+          "SecurityGroupId": {
+            "Fn::GetAtt": [
+              "Network",
+              "Outputs.NGINXBSecurityGroup"
+            ]
+          }
+        },
+        "TimeoutInMinutes": 150
+      },
+      "DependsOn": "Management"
+    },
+    "APACHEA": {
+      "Type": "AWS::CloudFormation::Stack",
+      "Properties": {
+        "TemplateURL": {
+          "Fn::Sub": "https://${ArtifactsBucket}.s3.${AWS::Region}.${AWS::URLSuffix}/${ArtifactsPrefix}/templates/target.template.json"
+        },
+        "Parameters": {
+          "ArtifactsBucket": {
+            "Ref": "ArtifactsBucket"
+          },
+          "ArtifactsPrefix": {
+            "Ref": "ArtifactsPrefix"
+          },
+          "BundleSha256": {
+            "Ref": "BundleSha256"
+          },
+          "AmiId": {
+            "Ref": "AmiId"
+          },
+          "FleetId": {
+            "Ref": "FleetId"
+          },
+          "InstanceType": {
+            "Ref": "TargetInstanceType"
+          },
+          "DeviceId": "APACHE-A",
+          "DeviceKey": "APACHEA",
+          "SubnetId": {
+            "Fn::GetAtt": [
+              "Network",
+              "Outputs.ServiceASubnetId"
+            ]
+          },
+          "SecurityGroupId": {
+            "Fn::GetAtt": [
+              "Network",
+              "Outputs.APACHEASecurityGroup"
+            ]
+          }
+        },
+        "TimeoutInMinutes": 150
+      },
+      "DependsOn": "Management"
+    },
+    "APACHEB": {
+      "Type": "AWS::CloudFormation::Stack",
+      "Properties": {
+        "TemplateURL": {
+          "Fn::Sub": "https://${ArtifactsBucket}.s3.${AWS::Region}.${AWS::URLSuffix}/${ArtifactsPrefix}/templates/target.template.json"
+        },
+        "Parameters": {
+          "ArtifactsBucket": {
+            "Ref": "ArtifactsBucket"
+          },
+          "ArtifactsPrefix": {
+            "Ref": "ArtifactsPrefix"
+          },
+          "BundleSha256": {
+            "Ref": "BundleSha256"
+          },
+          "AmiId": {
+            "Ref": "AmiId"
+          },
+          "FleetId": {
+            "Ref": "FleetId"
+          },
+          "InstanceType": {
+            "Ref": "TargetInstanceType"
+          },
+          "DeviceId": "APACHE-B",
+          "DeviceKey": "APACHEB",
+          "SubnetId": {
+            "Fn::GetAtt": [
+              "Network",
+              "Outputs.ServiceBSubnetId"
+            ]
+          },
+          "SecurityGroupId": {
+            "Fn::GetAtt": [
+              "Network",
+              "Outputs.APACHEBSecurityGroup"
+            ]
+          }
+        },
+        "TimeoutInMinutes": 150
+      },
+      "DependsOn": "Management"
+    },
+    "BINDA": {
+      "Type": "AWS::CloudFormation::Stack",
+      "Properties": {
+        "TemplateURL": {
+          "Fn::Sub": "https://${ArtifactsBucket}.s3.${AWS::Region}.${AWS::URLSuffix}/${ArtifactsPrefix}/templates/target.template.json"
+        },
+        "Parameters": {
+          "ArtifactsBucket": {
+            "Ref": "ArtifactsBucket"
+          },
+          "ArtifactsPrefix": {
+            "Ref": "ArtifactsPrefix"
+          },
+          "BundleSha256": {
+            "Ref": "BundleSha256"
+          },
+          "AmiId": {
+            "Ref": "AmiId"
+          },
+          "FleetId": {
+            "Ref": "FleetId"
+          },
+          "InstanceType": {
+            "Ref": "TargetInstanceType"
+          },
+          "DeviceId": "BIND-A",
+          "DeviceKey": "BINDA",
+          "SubnetId": {
+            "Fn::GetAtt": [
+              "Network",
+              "Outputs.ServiceASubnetId"
+            ]
+          },
+          "SecurityGroupId": {
+            "Fn::GetAtt": [
+              "Network",
+              "Outputs.BINDASecurityGroup"
+            ]
+          }
+        },
+        "TimeoutInMinutes": 150
+      },
+      "DependsOn": "Management"
+    },
+    "BINDB": {
+      "Type": "AWS::CloudFormation::Stack",
+      "Properties": {
+        "TemplateURL": {
+          "Fn::Sub": "https://${ArtifactsBucket}.s3.${AWS::Region}.${AWS::URLSuffix}/${ArtifactsPrefix}/templates/target.template.json"
+        },
+        "Parameters": {
+          "ArtifactsBucket": {
+            "Ref": "ArtifactsBucket"
+          },
+          "ArtifactsPrefix": {
+            "Ref": "ArtifactsPrefix"
+          },
+          "BundleSha256": {
+            "Ref": "BundleSha256"
+          },
+          "AmiId": {
+            "Ref": "AmiId"
+          },
+          "FleetId": {
+            "Ref": "FleetId"
+          },
+          "InstanceType": {
+            "Ref": "TargetInstanceType"
+          },
+          "DeviceId": "BIND-B",
+          "DeviceKey": "BINDB",
+          "SubnetId": {
+            "Fn::GetAtt": [
+              "Network",
+              "Outputs.ServiceBSubnetId"
+            ]
+          },
+          "SecurityGroupId": {
+            "Fn::GetAtt": [
+              "Network",
+              "Outputs.BINDBSecurityGroup"
+            ]
+          }
+        },
+        "TimeoutInMinutes": 150
+      },
+      "DependsOn": "Management"
+    },
+    "OPENVPNA": {
+      "Type": "AWS::CloudFormation::Stack",
+      "Properties": {
+        "TemplateURL": {
+          "Fn::Sub": "https://${ArtifactsBucket}.s3.${AWS::Region}.${AWS::URLSuffix}/${ArtifactsPrefix}/templates/target.template.json"
+        },
+        "Parameters": {
+          "ArtifactsBucket": {
+            "Ref": "ArtifactsBucket"
+          },
+          "ArtifactsPrefix": {
+            "Ref": "ArtifactsPrefix"
+          },
+          "BundleSha256": {
+            "Ref": "BundleSha256"
+          },
+          "AmiId": {
+            "Ref": "AmiId"
+          },
+          "FleetId": {
+            "Ref": "FleetId"
+          },
+          "InstanceType": {
+            "Ref": "TargetInstanceType"
+          },
+          "DeviceId": "OPENVPN-A",
+          "DeviceKey": "OPENVPNA",
+          "SubnetId": {
+            "Fn::GetAtt": [
+              "Network",
+              "Outputs.ClientASubnetId"
+            ]
+          },
+          "SecurityGroupId": {
+            "Fn::GetAtt": [
+              "Network",
+              "Outputs.OPENVPNASecurityGroup"
+            ]
+          }
+        },
+        "TimeoutInMinutes": 150
+      },
+      "DependsOn": "Management"
+    },
+    "OPENVPNB": {
+      "Type": "AWS::CloudFormation::Stack",
+      "Properties": {
+        "TemplateURL": {
+          "Fn::Sub": "https://${ArtifactsBucket}.s3.${AWS::Region}.${AWS::URLSuffix}/${ArtifactsPrefix}/templates/target.template.json"
+        },
+        "Parameters": {
+          "ArtifactsBucket": {
+            "Ref": "ArtifactsBucket"
+          },
+          "ArtifactsPrefix": {
+            "Ref": "ArtifactsPrefix"
+          },
+          "BundleSha256": {
+            "Ref": "BundleSha256"
+          },
+          "AmiId": {
+            "Ref": "AmiId"
+          },
+          "FleetId": {
+            "Ref": "FleetId"
+          },
+          "InstanceType": {
+            "Ref": "TargetInstanceType"
+          },
+          "DeviceId": "OPENVPN-B",
+          "DeviceKey": "OPENVPNB",
+          "SubnetId": {
+            "Fn::GetAtt": [
+              "Network",
+              "Outputs.ClientBSubnetId"
+            ]
+          },
+          "SecurityGroupId": {
+            "Fn::GetAtt": [
+              "Network",
+              "Outputs.OPENVPNBSecurityGroup"
+            ]
+          }
+        },
+        "TimeoutInMinutes": 150
+      },
+      "DependsOn": "Management"
+    },
+    "OPENSSHA": {
+      "Type": "AWS::CloudFormation::Stack",
+      "Properties": {
+        "TemplateURL": {
+          "Fn::Sub": "https://${ArtifactsBucket}.s3.${AWS::Region}.${AWS::URLSuffix}/${ArtifactsPrefix}/templates/target.template.json"
+        },
+        "Parameters": {
+          "ArtifactsBucket": {
+            "Ref": "ArtifactsBucket"
+          },
+          "ArtifactsPrefix": {
+            "Ref": "ArtifactsPrefix"
+          },
+          "BundleSha256": {
+            "Ref": "BundleSha256"
+          },
+          "AmiId": {
+            "Ref": "AmiId"
+          },
+          "FleetId": {
+            "Ref": "FleetId"
+          },
+          "InstanceType": {
+            "Ref": "TargetInstanceType"
+          },
+          "DeviceId": "OPENSSH-A",
+          "DeviceKey": "OPENSSHA",
+          "SubnetId": {
+            "Fn::GetAtt": [
+              "Network",
+              "Outputs.ClientASubnetId"
+            ]
+          },
+          "SecurityGroupId": {
+            "Fn::GetAtt": [
+              "Network",
+              "Outputs.OPENSSHASecurityGroup"
+            ]
+          }
+        },
+        "TimeoutInMinutes": 150
+      },
+      "DependsOn": "Management"
+    },
+    "OPENSSHB": {
+      "Type": "AWS::CloudFormation::Stack",
+      "Properties": {
+        "TemplateURL": {
+          "Fn::Sub": "https://${ArtifactsBucket}.s3.${AWS::Region}.${AWS::URLSuffix}/${ArtifactsPrefix}/templates/target.template.json"
+        },
+        "Parameters": {
+          "ArtifactsBucket": {
+            "Ref": "ArtifactsBucket"
+          },
+          "ArtifactsPrefix": {
+            "Ref": "ArtifactsPrefix"
+          },
+          "BundleSha256": {
+            "Ref": "BundleSha256"
+          },
+          "AmiId": {
+            "Ref": "AmiId"
+          },
+          "FleetId": {
+            "Ref": "FleetId"
+          },
+          "InstanceType": {
+            "Ref": "TargetInstanceType"
+          },
+          "DeviceId": "OPENSSH-B",
+          "DeviceKey": "OPENSSHB",
+          "SubnetId": {
+            "Fn::GetAtt": [
+              "Network",
+              "Outputs.ClientBSubnetId"
+            ]
+          },
+          "SecurityGroupId": {
+            "Fn::GetAtt": [
+              "Network",
+              "Outputs.OPENSSHBSecurityGroup"
+            ]
+          }
+        },
+        "TimeoutInMinutes": 150
+      },
+      "DependsOn": "Management"
+    },
+    "HAPROXYA": {
+      "Type": "AWS::CloudFormation::Stack",
+      "Properties": {
+        "TemplateURL": {
+          "Fn::Sub": "https://${ArtifactsBucket}.s3.${AWS::Region}.${AWS::URLSuffix}/${ArtifactsPrefix}/templates/target.template.json"
+        },
+        "Parameters": {
+          "ArtifactsBucket": {
+            "Ref": "ArtifactsBucket"
+          },
+          "ArtifactsPrefix": {
+            "Ref": "ArtifactsPrefix"
+          },
+          "BundleSha256": {
+            "Ref": "BundleSha256"
+          },
+          "AmiId": {
+            "Ref": "AmiId"
+          },
+          "FleetId": {
+            "Ref": "FleetId"
+          },
+          "InstanceType": {
+            "Ref": "TargetInstanceType"
+          },
+          "DeviceId": "HAPROXY-A",
+          "DeviceKey": "HAPROXYA",
+          "SubnetId": {
+            "Fn::GetAtt": [
+              "Network",
+              "Outputs.ServiceASubnetId"
+            ]
+          },
+          "SecurityGroupId": {
+            "Fn::GetAtt": [
+              "Network",
+              "Outputs.HAPROXYASecurityGroup"
+            ]
+          }
+        },
+        "TimeoutInMinutes": 150
+      },
+      "DependsOn": "Management"
+    },
+    "HAPROXYB": {
+      "Type": "AWS::CloudFormation::Stack",
+      "Properties": {
+        "TemplateURL": {
+          "Fn::Sub": "https://${ArtifactsBucket}.s3.${AWS::Region}.${AWS::URLSuffix}/${ArtifactsPrefix}/templates/target.template.json"
+        },
+        "Parameters": {
+          "ArtifactsBucket": {
+            "Ref": "ArtifactsBucket"
+          },
+          "ArtifactsPrefix": {
+            "Ref": "ArtifactsPrefix"
+          },
+          "BundleSha256": {
+            "Ref": "BundleSha256"
+          },
+          "AmiId": {
+            "Ref": "AmiId"
+          },
+          "FleetId": {
+            "Ref": "FleetId"
+          },
+          "InstanceType": {
+            "Ref": "TargetInstanceType"
+          },
+          "DeviceId": "HAPROXY-B",
+          "DeviceKey": "HAPROXYB",
+          "SubnetId": {
+            "Fn::GetAtt": [
+              "Network",
+              "Outputs.ServiceBSubnetId"
+            ]
+          },
+          "SecurityGroupId": {
+            "Fn::GetAtt": [
+              "Network",
+              "Outputs.HAPROXYBSecurityGroup"
+            ]
+          }
+        },
+        "TimeoutInMinutes": 150
+      },
+      "DependsOn": "Management"
+    },
+    "DNSMASQA": {
+      "Type": "AWS::CloudFormation::Stack",
+      "Properties": {
+        "TemplateURL": {
+          "Fn::Sub": "https://${ArtifactsBucket}.s3.${AWS::Region}.${AWS::URLSuffix}/${ArtifactsPrefix}/templates/target.template.json"
+        },
+        "Parameters": {
+          "ArtifactsBucket": {
+            "Ref": "ArtifactsBucket"
+          },
+          "ArtifactsPrefix": {
+            "Ref": "ArtifactsPrefix"
+          },
+          "BundleSha256": {
+            "Ref": "BundleSha256"
+          },
+          "AmiId": {
+            "Ref": "AmiId"
+          },
+          "FleetId": {
+            "Ref": "FleetId"
+          },
+          "InstanceType": {
+            "Ref": "TargetInstanceType"
+          },
+          "DeviceId": "DNSMASQ-A",
+          "DeviceKey": "DNSMASQA",
+          "SubnetId": {
+            "Fn::GetAtt": [
+              "Network",
+              "Outputs.ServiceASubnetId"
+            ]
+          },
+          "SecurityGroupId": {
+            "Fn::GetAtt": [
+              "Network",
+              "Outputs.DNSMASQASecurityGroup"
+            ]
+          }
+        },
+        "TimeoutInMinutes": 150
+      },
+      "DependsOn": "Management"
+    },
+    "DNSMASQB": {
+      "Type": "AWS::CloudFormation::Stack",
+      "Properties": {
+        "TemplateURL": {
+          "Fn::Sub": "https://${ArtifactsBucket}.s3.${AWS::Region}.${AWS::URLSuffix}/${ArtifactsPrefix}/templates/target.template.json"
+        },
+        "Parameters": {
+          "ArtifactsBucket": {
+            "Ref": "ArtifactsBucket"
+          },
+          "ArtifactsPrefix": {
+            "Ref": "ArtifactsPrefix"
+          },
+          "BundleSha256": {
+            "Ref": "BundleSha256"
+          },
+          "AmiId": {
+            "Ref": "AmiId"
+          },
+          "FleetId": {
+            "Ref": "FleetId"
+          },
+          "InstanceType": {
+            "Ref": "TargetInstanceType"
+          },
+          "DeviceId": "DNSMASQ-B",
+          "DeviceKey": "DNSMASQB",
+          "SubnetId": {
+            "Fn::GetAtt": [
+              "Network",
+              "Outputs.ServiceBSubnetId"
+            ]
+          },
+          "SecurityGroupId": {
+            "Fn::GetAtt": [
+              "Network",
+              "Outputs.DNSMASQBSecurityGroup"
+            ]
+          }
+        },
+        "TimeoutInMinutes": 150
+      },
+      "DependsOn": "Management"
+    },
+    "ClientAToServiceA": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": {
+          "Fn::GetAtt": [
+            "Network",
+            "Outputs.ClientARouteTableId"
+          ]
+        },
+        "DestinationCidrBlock": "10.53.20.0/24",
+        "InstanceId": {
+          "Fn::GetAtt": [
+            "FRRA",
+            "Outputs.InstanceId"
+          ]
+        }
+      }
+    },
+    "ServiceAToClientA": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": {
+          "Fn::GetAtt": [
+            "Network",
+            "Outputs.ServiceARouteTableId"
+          ]
+        },
+        "DestinationCidrBlock": "10.53.10.0/24",
+        "InstanceId": {
+          "Fn::GetAtt": [
+            "FRRA",
+            "Outputs.InstanceId"
+          ]
+        }
+      }
+    },
+    "ClientBToServiceB": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": {
+          "Fn::GetAtt": [
+            "Network",
+            "Outputs.ClientBRouteTableId"
+          ]
+        },
+        "DestinationCidrBlock": "10.53.21.0/24",
+        "InstanceId": {
+          "Fn::GetAtt": [
+            "FRRB",
+            "Outputs.InstanceId"
+          ]
+        }
+      }
+    },
+    "ServiceBToClientB": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": {
+          "Fn::GetAtt": [
+            "Network",
+            "Outputs.ServiceBRouteTableId"
+          ]
+        },
+        "DestinationCidrBlock": "10.53.11.0/24",
+        "InstanceId": {
+          "Fn::GetAtt": [
+            "FRRB",
+            "Outputs.InstanceId"
+          ]
+        }
+      }
+    },
+    "VpnAToB": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": {
+          "Fn::GetAtt": [
+            "Network",
+            "Outputs.ClientARouteTableId"
+          ]
+        },
+        "DestinationCidrBlock": "10.53.11.0/24",
+        "InstanceId": {
+          "Fn::GetAtt": [
+            "FRRA",
+            "Outputs.InstanceId"
+          ]
+        }
+      }
+    },
+    "VpnBToA": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": {
+          "Fn::GetAtt": [
+            "Network",
+            "Outputs.ClientBRouteTableId"
+          ]
+        },
+        "DestinationCidrBlock": "10.53.10.0/24",
+        "InstanceId": {
+          "Fn::GetAtt": [
+            "FRRA",
+            "Outputs.InstanceId"
+          ]
+        }
+      }
+    },
+    "FleetReadiness": {
+      "Type": "AWS::SSM::Association",
+      "Properties": {
+        "Name": "AWS-RunShellScript",
+        "Targets": [
+          {
+            "Key": "InstanceIds",
+            "Values": [
+              {
+                "Fn::GetAtt": [
+                  "Management",
+                  "Outputs.InstanceId"
+                ]
+              }
+            ]
+          }
+        ],
+        "Parameters": {
+          "commands": [
+            "cd /opt/netvuln/repo && /opt/netvuln/venv/bin/python -m infra.aws.ansible_control --config /etc/netvuln/bootstrap.json"
+          ],
+          "executionTimeout": [
+            "14400"
+          ]
+        },
+        "WaitForSuccessTimeoutSeconds": 14400
+      },
+      "DependsOn": [
+        "FRRA",
+        "FRRB",
+        "NGINXA",
+        "NGINXB",
+        "APACHEA",
+        "APACHEB",
+        "BINDA",
+        "BINDB",
+        "OPENVPNA",
+        "OPENVPNB",
+        "OPENSSHA",
+        "OPENSSHB",
+        "HAPROXYA",
+        "HAPROXYB",
+        "DNSMASQA",
+        "DNSMASQB",
+        "ClientAToServiceA",
+        "ServiceAToClientA",
+        "ClientBToServiceB",
+        "ServiceBToClientB",
+        "VpnAToB",
+        "VpnBToA"
+      ]
+    }
+  },
+  "Outputs": {
+    "FRRAInstanceId": {
+      "Value": {
+        "Fn::GetAtt": [
+          "FRRA",
+          "Outputs.InstanceId"
+        ]
+      }
+    },
+    "FRRBInstanceId": {
+      "Value": {
+        "Fn::GetAtt": [
+          "FRRB",
+          "Outputs.InstanceId"
+        ]
+      }
+    },
+    "NGINXAInstanceId": {
+      "Value": {
+        "Fn::GetAtt": [
+          "NGINXA",
+          "Outputs.InstanceId"
+        ]
+      }
+    },
+    "NGINXBInstanceId": {
+      "Value": {
+        "Fn::GetAtt": [
+          "NGINXB",
+          "Outputs.InstanceId"
+        ]
+      }
+    },
+    "APACHEAInstanceId": {
+      "Value": {
+        "Fn::GetAtt": [
+          "APACHEA",
+          "Outputs.InstanceId"
+        ]
+      }
+    },
+    "APACHEBInstanceId": {
+      "Value": {
+        "Fn::GetAtt": [
+          "APACHEB",
+          "Outputs.InstanceId"
+        ]
+      }
+    },
+    "BINDAInstanceId": {
+      "Value": {
+        "Fn::GetAtt": [
+          "BINDA",
+          "Outputs.InstanceId"
+        ]
+      }
+    },
+    "BINDBInstanceId": {
+      "Value": {
+        "Fn::GetAtt": [
+          "BINDB",
+          "Outputs.InstanceId"
+        ]
+      }
+    },
+    "OPENVPNAInstanceId": {
+      "Value": {
+        "Fn::GetAtt": [
+          "OPENVPNA",
+          "Outputs.InstanceId"
+        ]
+      }
+    },
+    "OPENVPNBInstanceId": {
+      "Value": {
+        "Fn::GetAtt": [
+          "OPENVPNB",
+          "Outputs.InstanceId"
+        ]
+      }
+    },
+    "OPENSSHAInstanceId": {
+      "Value": {
+        "Fn::GetAtt": [
+          "OPENSSHA",
+          "Outputs.InstanceId"
+        ]
+      }
+    },
+    "OPENSSHBInstanceId": {
+      "Value": {
+        "Fn::GetAtt": [
+          "OPENSSHB",
+          "Outputs.InstanceId"
+        ]
+      }
+    },
+    "HAPROXYAInstanceId": {
+      "Value": {
+        "Fn::GetAtt": [
+          "HAPROXYA",
+          "Outputs.InstanceId"
+        ]
+      }
+    },
+    "HAPROXYBInstanceId": {
+      "Value": {
+        "Fn::GetAtt": [
+          "HAPROXYB",
+          "Outputs.InstanceId"
+        ]
+      }
+    },
+    "DNSMASQAInstanceId": {
+      "Value": {
+        "Fn::GetAtt": [
+          "DNSMASQA",
+          "Outputs.InstanceId"
+        ]
+      }
+    },
+    "DNSMASQBInstanceId": {
+      "Value": {
+        "Fn::GetAtt": [
+          "DNSMASQB",
+          "Outputs.InstanceId"
+        ]
+      }
+    },
+    "ManagementInstanceId": {
+      "Value": {
+        "Fn::GetAtt": [
+          "Management",
+          "Outputs.InstanceId"
+        ]
+      }
+    },
+    "FactsPrefix": {
+      "Value": {
+        "Fn::Sub": "s3://${ArtifactsBucket}/${ArtifactsPrefix}/runs/ansible/"
+      }
+    },
+    "CollectionTransport": {
+      "Value": "ansible_ssh_agentless"
+    },
+    "ExpectedTargets": {
+      "Value": "16"
+    }
+  }
+}

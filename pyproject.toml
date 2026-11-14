@@ -9,17 +9,23 @@ description = "Extensible cited RAG for network vulnerability lookup"
 requires-python = ">=3.11"
 dynamic = ["dependencies"]
 
+[project.optional-dependencies]
+aws = ["boto3>=1.40,<2", "cfn-lint>=1.41,<2"]
+test = ["httpx>=0.27,<1"]
+
 [tool.setuptools.dynamic]
 dependencies = {file = ["requirements.txt"]}
 
 [tool.setuptools.packages.find]
-include = ["api", "config", "data_pipeline", "evaluation", "rag", "rag.*"]
+include = ["api", "config", "data_pipeline", "evaluation", "rag", "rag.*", "collector", "infra", "infra.*"]
 namespaces = false
 
 [tool.setuptools.package-data]
 config = ["products*.json"]
 evaluation = ["famous_cves.json", "questions.sample.jsonl"]
 "rag.generation" = ["prompts.json"]
+"infra.aws" = ["experiment.json", "sources.lock.json", "collector-requirements.txt", "control-requirements.txt", "templates/*.json", "validation/*"]
+"infra.ansible" = ["*.yml", "*.cfg", "*.j2"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
