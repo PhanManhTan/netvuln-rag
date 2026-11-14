@@ -14,6 +14,9 @@ from data_pipeline import process as process_cli
 from data_pipeline.contracts import CrawlOptions
 from data_pipeline.crawl import crawl_product
 from data_pipeline.nvd import NVDAdapter
+from data_pipeline.chunker import create_chunks
+from data_pipeline.schemas import VersionRule
+from data_pipeline.versioning import VersionMatcher
 from rag.retrieval.models import MatchStatus
 from rag.retrieval.retriever import Retriever
 from evaluation import build as build_questions
@@ -186,6 +189,56 @@ def test_nvd_range_crossing_minor_releases_is_not_forced_into_start_branch(tmp_p
     }
     rule = adapter._version_rules(record)[0]
     assert rule.branch is None
+
+
+@pytest.mark.parametrize(
+    ("configuration", "limitation"),
+    [
+        ({"operator": "AND", "nodes": [{"cpeMatch": [{"criteria": "cpe:2.3:o:fortinet:fortios:*:*:*:*:*:*:*:*", "vulnerable": True}]}]}, "AND"),
+        ({"nodes": [{"negate": True, "cpeMatch": [{"criteria": "cpe:2.3:o:fortinet:fortios:*:*:*:*:*:*:*:*", "vulnerable": True}]}]}, "negated"),
+        ({"nodes": [{"cpeMatch": [{"criteria": "cpe:2.3:o:fortinet:fortios:*:*:*:*:*:windows:*:*", "vulnerable": True}]}]}, "target software"),
+        ({"nodes": [{"cpeMatch": [{"criteria": "cpe:2.3:o:fortinet:fortios:7.2:p1:*:*:*:*:*:*", "vulnerable": True}]}]}, "update"),
+        ({"nodes": [{"cpeMatch": [{"criteria": "cpe:2.3:a:fortinet:fortios:*:*:*:*:*:*:*:*", "vulnerable": True}]}]}, "part"),
+        ({"nodes": [{"cpeMatch": [{"criteria": "cpe:2.3:o:fortinet:fortios:7.2.*:*:*:*:*:*:*:*", "vulnerable": True}]}]}, "patterns"),
+        ({"nodes": [{"cpeMatch": [{"criteria": "cpe:2.3:o:fortinet:fortios:-:*:*:*:*:*:*:*", "vulnerable": True}]}]}, "not applicable"),
+        ({"nodes": [{"cpeMatch": [{"criteria": "cpe:2.3:o:fortinet:fortios::*:*:*:*:*:*:*", "vulnerable": True}]}]}, "empty"),
+        ({"nodes": [{"cpeMatch": [{"criteria": "invalid:2.3:o:fortinet:fortios:*:*:*:*:*:*:*:*", "vulnerable": True}]}]}, "Malformed"),
+        ({"nodes": [{"cpeMatch": [{"criteria": r"cpe:2.3:o:fortinet:fortios:7.2:p\:1:*:*:*:*:*:*", "vulnerable": True}]}]}, "escaped"),
+        ({"nodes": [{"cpeMatch": [{"criteria": "cpe:2.3:o:fortinet:fortios:*:*:*:*:*:*:*:*", "vulnerable": "false"}]}]}, "not a boolean"),
+    ],
+)
+def test_conditional_cpe_is_preserved_as_unknown_instead_of_unconditional_rule(tmp_path: Path, configuration, limitation) -> None:
+    adapter = NVDAdapter(make_settings(tmp_path), profile())
+    normalized = adapter._normalize({"id": "CVE-2024-0001", "configurations": [configuration]})
+
+    assert normalized.applicability == ()
+    assert any(limitation in note for note in normalized.applicability_notes)
+    decision = VersionMatcher().evaluate_record(normalized, "7.2.7")
+    assert decision.status == MatchStatus.UNKNOWN
+    assert limitation in decision.reason
+    overview, = create_chunks(normalized)
+    assert limitation in overview.text
+
+
+def test_environment_cpe_is_not_a_not_affected_assertion(tmp_path: Path) -> None:
+    adapter = NVDAdapter(make_settings(tmp_path), profile())
+    normalized = adapter._normalize({"id": "CVE-2024-0001", "configurations": [{"nodes": [{"cpeMatch": [{
+        "criteria": "cpe:2.3:o:fortinet:fortios:*:*:*:*:*:*:*:*", "vulnerable": False,
+    }]}]}]})
+
+    assert normalized.applicability == ()
+    assert VersionMatcher().evaluate_record(normalized, "7.2.7").status == MatchStatus.UNKNOWN
+
+
+def test_exact_query_membership_keeps_deployment_caveat(tmp_path: Path) -> None:
+    adapter = NVDAdapter(make_settings(tmp_path), profile())
+    normalized = adapter._normalize(
+        {"id": "CVE-2024-0001", "configurations": [{"operator": "AND", "nodes": []}]},
+        version_rules=[VersionRule(source_id="pending", authority="nvd", status="affected", exact_versions=("7.2.7",), literal_exact=True)],
+    )
+    assert VersionMatcher().evaluate_record(normalized, "7.2.7").status == MatchStatus.AFFECTED
+    assert any("saved NVD query" in note for note in normalized.applicability_notes)
+    assert "deployment" in create_chunks(normalized)[0].text
 
 
 def test_exact_cpe_crawl_drives_retrieval_and_evaluation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

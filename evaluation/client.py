@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import math
 import time
-from collections.abc import Iterable
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
 from typing import Any
@@ -12,12 +11,12 @@ from typing import Any
 import requests
 
 from config.settings import Settings
+from evaluation.performance import TOKEN_FIELDS, summarize_usage
 from rag.generation.client import LLMClient
 
 
 RETRYABLE_STATUS = {429, 500, 502, 503, 504}
 MAX_RETRY_DELAY = 60
-TOKEN_FIELDS = ("input_tokens", "output_tokens", "total_tokens", "reasoning_tokens", "cached_input_tokens")
 
 
 def _object(value: Any) -> dict[str, Any]:
@@ -30,6 +29,8 @@ def _count(value: Any) -> int | None:
 
 def _read_usage(provider: str, payload: dict[str, Any]) -> dict[str, int]:
     usage = _object(payload.get("usage"))
+    if provider == "groq" and not usage:
+        usage = _object(_object(payload.get("x_groq")).get("usage"))
     if provider == "gemini":
         usage = _object(payload.get("usageMetadata"))
         input_tokens = _count(usage.get("promptTokenCount"))
@@ -67,21 +68,6 @@ def _read_usage(provider: str, payload: dict[str, Any]) -> dict[str, int]:
     return {field: value for field, value in counts.items() if value is not None}
 
 
-def summarize_usage(attempts: Iterable[dict[str, Any]]) -> dict[str, Any]:
-    recorded = list(attempts)
-    count = len(recorded)
-    reported = {field: [attempt[field] for attempt in recorded if field in attempt] for field in TOKEN_FIELDS}
-    return {
-        "attempts": count,
-        "failed_attempts": sum(not attempt["succeeded"] for attempt in recorded),
-        "average_request_latency_seconds": (
-            sum(attempt["latency_seconds"] for attempt in recorded) / count if count else None
-        ),
-        **{field: sum(values) if values or not count else None for field, values in reported.items()},
-        "reported_attempts": {field: len(values) for field, values in reported.items()},
-    }
-
-
 def _retry_after(value: str) -> float:
     try:
         delay = float(value)
@@ -111,6 +97,10 @@ class BenchmarkClient(LLMClient):
     def _record_response(self, provider: str, payload: dict[str, Any]) -> None:
         self.attempts[-1].update(_read_usage(provider, payload))
 
+    def _record_chunk(self, text: str) -> None:
+        self.attempts[-1].setdefault("ttft_seconds", time.monotonic() - self._request_started)
+        super()._record_chunk(text)
+
     def generate(self, system_prompt: str, user_prompt: str, provider: str | None = None) -> str:
         retries = 0
         while True:
@@ -120,6 +110,7 @@ class BenchmarkClient(LLMClient):
                 time.sleep(remaining)
                 self.wait_seconds += time.monotonic() - started_wait
             request_started = time.monotonic()
+            self._request_started = request_started
             self._next_request = request_started + self.request_interval
             attempt: dict[str, Any] = {"succeeded": False}
             self.attempts.append(attempt)

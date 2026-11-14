@@ -18,9 +18,11 @@ from config.settings import get_settings
 from data_pipeline.cve_catalog import load_catalog, load_catalog_manifest
 from data_pipeline.process import load_processed_manifest, resolve_processed_artifact
 from evaluation.baselines import Evidence, bm25_context, document_contexts, raw_contexts, raw_snapshot_ids
-from evaluation.client import BenchmarkClient, summarize_usage
-from evaluation.dataset import load_questions, validate_question_runs
-from evaluation.metrics import compare_summaries, extract_cves, infer_status, summarize
+from evaluation.client import BenchmarkClient
+from evaluation.dataset import dataset_quality_report, load_questions, validate_question_runs
+from evaluation.metrics import SCORER_VERSION, compare_summaries, extract_cves, infer_status, summarize
+from evaluation.performance import format_performance, summarize_performance, write_metrics_csv
+from rag.generation.answers import ANSWER_SCHEMA_VERSION, STRUCTURED_ANSWER_INSTRUCTION, parse_answer
 from rag.generation.chatbot import RAGChatbot, SOURCE_LIST_SEPARATOR, load_prompts
 from rag.generation.client import LLMClient
 from rag.retrieval.retriever import Retriever
@@ -53,8 +55,21 @@ def run_baseline(
 ) -> dict[str, Any]:
     started = time.perf_counter()
     error = None
+    raw_answer = ""
+    trace: dict[str, Any] = {}
     try:
-        answer = llm.generate(BASELINE_SYSTEM_PROMPT, item["question"], provider)
+        raw_answer = llm.generate(BASELINE_SYSTEM_PROMPT + "\n\n" + STRUCTURED_ANSWER_INSTRUCTION, item["question"], provider)
+        parsed = parse_answer(raw_answer)
+        answer = parsed.answer
+        trace = {
+            "verdict": parsed.verdict,
+            "asserted_cves": list(parsed.asserted_cves) if parsed.asserted_cves is not None else None,
+            "answer_format": "structured" if parsed.structured else "legacy",
+            "status_source": "output_validation" if parsed.error else "structured_verdict" if parsed.verdict is not None else "legacy_inference",
+            "output_error": parsed.error,
+        }
+        if parsed.error:
+            error = parsed.error
     except Exception as exc:
         answer = ""
         error = str(exc) or type(exc).__name__
@@ -62,7 +77,9 @@ def run_baseline(
         **item,
         "mode": "llm_only",
         "answer": answer,
-        "predicted_status": "error" if error else _answer_status(answer, item["question_type"]),
+        "raw_answer": raw_answer,
+        **trace,
+        "predicted_status": "error" if error else trace.get("verdict") or _answer_status(answer, item["question_type"]),
         "citations": [],
         "latency_seconds": time.perf_counter() - started,
         "error": error,
@@ -94,8 +111,17 @@ def _run_with_evidence(
     started = time.perf_counter()
     error = None
     evidence_cves = []
+    trace: dict[str, Any] = {}
     try:
         response = answer_question()
+        trace = {
+            field: response[field]
+            for field in (
+                "verdict", "asserted_cves", "answer_format", "raw_answer", "output_error",
+                "model_verdict", "model_asserted_cves", "rejected_cves", "rejected_source_ids",
+                "filtered_response", "verdict_source",
+            ) if field in response
+        }
         answer = response["answer"]
         citations = response["citations"]
         evidence_cves = response.get("retrieved_evidence_cves")
@@ -105,9 +131,16 @@ def _run_with_evidence(
         if predicted_status == "answered":
             if citations:
                 answer = answer.rsplit(SOURCE_LIST_SEPARATOR, 1)[0]
-            predicted_status = _answer_status(answer, item["question_type"])
+            predicted_status = response.get("verdict") or _answer_status(answer, item["question_type"])
         elif predicted_status == "error":
             error = answer or "Generation returned an error."
+        trace["status_source"] = (
+            "output_validation" if response.get("output_error")
+            else "pipeline_status" if response.get("answer_format") == "deterministic"
+            else "structured_verdict" if response.get("verdict") is not None
+            else "legacy_inference" if response["status"] == "answered"
+            else "pipeline_status"
+        )
     except Exception as exc:
         answer = ""
         predicted_status = "error"
@@ -117,6 +150,7 @@ def _run_with_evidence(
         **item,
         "mode": mode,
         "answer": answer,
+        **trace,
         "predicted_status": predicted_status,
         "citations": citations,
         ("retrieved_evidence_cves" if mode == "rag" else "document_evidence_cves"): sorted(set(evidence_cves)),
@@ -173,6 +207,8 @@ def main() -> int:
         help="Minimum seconds between LLM attempts (default: 6 for Groq, 0 for other providers)",
     )
     parser.add_argument("--max-retries", type=int, default=2, help="Retries per transient LLM HTTP error")
+    parser.add_argument("--require-reviewed", action="store_true", help="Reject draft questions without reviewed evidence-backed labels")
+    parser.add_argument("--stream", action="store_true", help="Print live LLM output and record time to first text delta")
     args = parser.parse_args()
     if args.provider not in LLMClient.supported_providers:
         parser.error(f"Unsupported LLM provider: {args.provider}")
@@ -205,11 +241,17 @@ def main() -> int:
         dataset_path.relative_to(evaluation_dir).as_posix()
         if dataset_path.is_relative_to(evaluation_dir) else dataset_path.name
     )
-    questions = load_questions(dataset_path)
+    try:
+        questions = load_questions(dataset_path, require_reviewed=args.require_reviewed)
+    except (OSError, ValueError) as exc:
+        parser.error(str(exc))
     if args.limit is not None:
         questions = questions[:args.limit]
     if not questions:
         parser.error("Evaluation dataset has no questions")
+    label_quality = dataset_quality_report(questions)
+    if not label_quality.get("reviewed_ready"):
+        print("Warning: dataset includes unreviewed labels; automatic scores measure agreement with draft snapshot labels.", flush=True)
 
     question_products = {item["product_id"] for item in questions}
     processed_manifest = None
@@ -246,6 +288,8 @@ def main() -> int:
     known_cves = load_catalog(catalog_path) if catalog_path is not None else None
     catalog_manifest = load_catalog_manifest(catalog_path) if catalog_path is not None else None
     llm = BenchmarkClient(settings, interval, args.max_retries)
+    if args.stream:
+        llm.on_chunk = lambda text: print(text, end="", flush=True)
     chatbot = RAGChatbot(settings=settings, llm=llm, retriever=retriever)
     available_runners: dict[str, Runner] = {
         "llm_only": partial(run_baseline, llm=llm, provider=args.provider),
@@ -261,6 +305,12 @@ def main() -> int:
     run_dir.mkdir(parents=True, exist_ok=False)
     metadata = {
         "created_at": started_at.isoformat(),
+        "scorer_version": SCORER_VERSION,
+        "answer_schema_version": ANSWER_SCHEMA_VERSION,
+        "label_quality": label_quality,
+        "require_reviewed": args.require_reviewed,
+        "automatic_score_scope": "CVE sets, verdicts and expected URL overlap; factual content and source support require separate review",
+        "non_version_verdict_semantics": "affected denotes a supported CVE list or description, not deployment applicability",
         "provider": args.provider,
         "model": llm.model_name(args.provider),
         "modes": modes,
@@ -269,6 +319,7 @@ def main() -> int:
         "target_questions": len(questions),
         "request_interval_seconds": interval,
         "max_retries": args.max_retries,
+        "stream": args.stream,
         "embedding_provider": settings.embedding_provider,
         "embedding_model": settings.embedding_model,
         "embedding_device": (settings.embedding_device or "auto") if settings.embedding_provider == "local" else None,
@@ -310,7 +361,6 @@ def run_benchmark(
     for path in paths.values():
         path.touch()
     results: dict[str, list[dict[str, Any]]] = {mode: [] for mode in paths}
-    requests_by_mode: dict[str, list[list[dict[str, Any]]]] = {mode: [] for mode in paths}
     interrupted = False
     started = time.monotonic()
     try:
@@ -321,8 +371,22 @@ def run_benchmark(
                 print(f"[{index}/{len(questions)}] {item['id']} - {mode}", flush=True)
                 waited_before = llm.wait_seconds
                 llm.attempts = []
-                requests_by_mode[mode].append(llm.attempts)
-                row = runner(item)
+                question_started = time.perf_counter()
+                if llm.on_chunk is not None:
+                    print("LLM draft (streaming; final validation follows):", flush=True)
+                try:
+                    row = runner(item)
+                except KeyboardInterrupt:
+                    if not llm.attempts:
+                        raise
+                    # Preserve already attempted calls and any provider usage
+                    # even when the question is interrupted before returning.
+                    interrupted = True
+                    row = {
+                        **item, "mode": mode, "answer": "", "predicted_status": "error",
+                        "citations": [], "error": "Interrupted",
+                        "latency_seconds": time.perf_counter() - question_started,
+                    }
                 row["llm_requests"] = llm.attempts
                 row["latency_seconds"] = max(
                     0.0, row["latency_seconds"] - (llm.wait_seconds - waited_before)
@@ -330,6 +394,10 @@ def run_benchmark(
                 with paths[mode].open("a", encoding="utf-8", newline="\n") as file:
                     file.write(json.dumps(row, ensure_ascii=False) + "\n")
                 results[mode].append(row)
+                if llm.on_chunk is not None:
+                    print(f"\nFinal result [{row['predicted_status']}]:\n{row['answer'] or row['error']}", flush=True)
+                if interrupted:
+                    raise KeyboardInterrupt
             if llm.stop_reason:
                 break
     except KeyboardInterrupt:
@@ -348,25 +416,34 @@ def run_benchmark(
         completed = len(scored) == len(questions)
         report = {
             **metadata,
+            "scorer_version": SCORER_VERSION,
             "paired_questions": len(pairs),
             "scored_questions": len(scored),
             "failed_responses": failures,
+            "attempted_questions": {mode: len(rows) for mode, rows in results.items()},
+            "filtered_responses": {
+                mode: sum(bool(row.get("output_error") in {"unsupported_identifier_or_citation", "version_verdict_conflict"} or row.get("filtered_response")) for row in rows)
+                for mode, rows in results.items()
+            },
             "completed": completed,
             "stop_reason": "Interrupted" if interrupted else llm.stop_reason,
             "llm_wait_seconds": llm.wait_seconds,
-            "llm_usage": {
-                mode: {
-                    **summarize_usage(attempt for attempts in requests for attempt in attempts),
-                    "questions_with_llm_call": sum(bool(attempts) for attempts in requests),
-                }
-                for mode, requests in requests_by_mode.items()
-            },
+            "llm_usage": {mode: summarize_performance(rows) for mode, rows in results.items()},
             "wall_seconds": time.monotonic() - started,
             **summaries,
         }
         for left, right in combinations(summaries, 2):
             report[f"{right}_minus_{left}"] = compare_summaries(summaries[left], summaries[right]) if scored else None
         write_json(run_dir / "summary.json", report)
+        write_metrics_csv(run_dir / "metrics.csv", report, SCORE_KEYS)
+        print("Main metrics: answer quality and LLM efficiency (summary.json / metrics.csv).", flush=True)
+        for mode, usage in report["llm_usage"].items():
+            print(
+                f"LLM efficiency [{mode}]: tokens={format_performance(usage, 'total_tokens')}, "
+                f"mean latency={format_performance(usage, 'average_request_latency_seconds')}, "
+                f"failed attempts={format_performance(usage, 'failed_attempts')}/{usage['attempts']}",
+                flush=True,
+            )
         print(f"Scored {len(scored)}/{len(questions)} pairs. Summary: {run_dir / 'summary.json'}", flush=True)
     if interrupted:
         return 130

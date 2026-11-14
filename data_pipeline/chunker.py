@@ -71,6 +71,8 @@ def create_chunks(value: VulnerabilityRecord | dict[str, object]) -> list[TextCh
             f"CVSS: {cvss.get('score', 'unknown')} ({cvss.get('severity', 'unknown')}).\n"
             f"CWE: {', '.join(record.weaknesses) or 'unknown'}."
         )
+        if record.applicability_notes:
+            text += "\nApplicability limitations: " + " ".join(record.applicability_notes)
         chunks.append(_make_chunk(record, "overview", text, source.source_id, source.url, None, len(chunks)))
 
     for rule in record.effective_rules:

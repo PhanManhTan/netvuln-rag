@@ -1,3 +1,4 @@
+import csv
 import json
 import sys
 from types import SimpleNamespace
@@ -9,6 +10,7 @@ import requests
 from config.settings import Settings
 from data_pipeline.schemas import TextChunk
 from evaluation import client, run
+from evaluation.metrics import summarize
 from rag.generation.client import LLMClient
 from rag.retrieval.models import ParsedQuery, QueryIntent, SearchBundle, SearchResult
 
@@ -69,7 +71,7 @@ def test_cli_persists_errors_but_scores_only_successful_pairs(monkeypatch, run_c
         def __init__(self, settings, llm, retriever):
             self.llm = llm
 
-        def ask(self, question, provider, top_k):
+        def ask(self, question, provider, top_k, **kwargs):
             if "9.6p1" in question:
                 raise RuntimeError("Index unavailable")
             return {
@@ -96,6 +98,14 @@ def test_cli_persists_errors_but_scores_only_successful_pairs(monkeypatch, run_c
     assert answers[1]["llm_requests"] == []
     assert summary["llm_usage"]["llm_only"]["total_tokens"] == 54
     assert summary["llm_usage"]["rag"]["total_tokens"] == 27
+    assert summary["llm_usage"]["rag"]["average_total_tokens_per_question"] == 13.5
+    assert summary["llm_usage"]["rag"]["questions_with_llm_call"] == 1
+    with (run_dir / "metrics.csv").open(encoding="utf-8-sig", newline="") as file:
+        metrics = list(csv.DictReader(file))
+    assert {row["metric_group"] for row in metrics} == {"answer_quality", "llm_efficiency"}
+    totals = {row["mode"]: row["value"] for row in metrics if row["metric"] == "total_tokens"}
+    assert totals == {"llm_only": "54", "rag": "27"}
+    assert summary["llm_usage"]["rag"]["saved_questions"] == 2  # Quality scores only one pair.
 
 
 def test_cli_compares_fixed_documents_and_counts_provider_tokens(monkeypatch, run_cli):
@@ -177,6 +187,48 @@ def test_cli_compares_fixed_documents_and_counts_provider_tokens(monkeypatch, ru
     row = json.loads((run_dir / "llm_document_results.jsonl").read_text(encoding="utf-8").splitlines()[0])
     assert row["document_evidence_cves"] == [other_cve]
     assert row["llm_requests"][0]["input_tokens"] == 70
+
+
+@pytest.mark.parametrize("completed", [True, False])
+def test_streaming_cli_persists_ttft_usage_and_final_validation(monkeypatch, run_cli, capsys, completed):
+    text = json.dumps({"verdict": "affected", "answer": f"Affected by {CVE}.", "asserted_cves": [CVE]})
+    events = [
+        {"choices": [{"delta": {"content": text[:20]}}]},
+        {"choices": [{"delta": {"content": text[20:]}}]},
+    ]
+    if completed:
+        events.extend([
+            {"choices": [], "x_groq": {"usage": {"prompt_tokens": 20, "completion_tokens": 7, "total_tokens": 27}}},
+            "[DONE]",
+        ])
+    response = Mock()
+    response.iter_lines.return_value = iter(
+        line for event in events
+        for line in ["data: " + (event if isinstance(event, str) else json.dumps(event)), ""]
+    )
+    monkeypatch.setattr("rag.generation.client.requests.post", Mock(return_value=response))
+    monkeypatch.setattr(sys, "argv", [*sys.argv, "--modes", "llm_only", "--stream", "--limit", "1"])
+    assert run.main() == (0 if completed else 1)
+    run_dir, = run_cli.iterdir()
+    summary = json.loads((run_dir / "summary.json").read_text())
+    row = json.loads((run_dir / "llm_only_results.jsonl").read_text())
+    usage = summary["llm_usage"]["llm_only"]
+    assert summary["stream"] is True
+    assert usage["ttft_reported_attempts"] == 1
+    assert usage["average_ttft_seconds"] >= 0
+    assert usage["failed_attempts"] == (0 if completed else 1)
+    if completed:
+        assert row["raw_answer"] == text
+        assert row["asserted_cves"] == [CVE]
+        assert usage["total_tokens"] == 27
+        assert summary["baseline"]["cve_and_status_accuracy"] == 1
+    else:
+        assert "before completion" in row["error"]
+        assert summary["baseline"] is None
+        assert usage["total_tokens"] is None
+    output = capsys.readouterr().out
+    assert text in output and "LLM draft (streaming" in output and "Final result [" in output
+    response.close.assert_called_once()
 
 
 def test_cli_runs_raw_baseline_from_pinned_pages_without_processed_data(monkeypatch, run_cli):
@@ -266,7 +318,7 @@ def test_cli_persists_baseline_before_rag_runs_and_keeps_it_after_interrupt(monk
         def __init__(self, settings, llm, retriever):
             pass
 
-        def ask(self, question, provider, top_k):
+        def ask(self, question, provider, top_k, **kwargs):
             baseline_path, = run_cli.glob("*/llm_only_results.jsonl")
             assert json.loads(baseline_path.read_text(encoding="utf-8"))["answer"] == f"Affected by {CVE}."
             raise KeyboardInterrupt
@@ -281,6 +333,28 @@ def test_cli_persists_baseline_before_rag_runs_and_keeps_it_after_interrupt(monk
     assert summary["baseline"] is None
     assert (run_dir / "llm_only_results.jsonl").read_text(encoding="utf-8")
     assert (run_dir / "rag_results.jsonl").read_text(encoding="utf-8") == ""
+
+
+def test_interrupted_question_keeps_attempted_llm_usage_in_logs_and_main_metrics(monkeypatch, run_cli):
+    class InterruptedChatbot:
+        def __init__(self, settings, llm, retriever):
+            self.llm = llm
+
+        def ask(self, question, provider, top_k, **kwargs):
+            self.llm.generate("", question, provider)
+            raise KeyboardInterrupt
+
+    monkeypatch.setattr(run, "RAGChatbot", InterruptedChatbot)
+    assert run.main() == 130
+    run_dir, = run_cli.iterdir()
+    summary = json.loads((run_dir / "summary.json").read_text())
+    row = json.loads((run_dir / "rag_results.jsonl").read_text())
+    assert row["error"] == "Interrupted"
+    assert row["llm_requests"][0]["total_tokens"] == 27
+    assert summary["llm_usage"]["rag"]["total_tokens"] == 27
+    assert summary["llm_usage"]["rag"]["attempts"] == 1
+    assert summary["failed_responses"]["rag"] == 1
+    assert summary["scored_questions"] == 0
 
 
 def test_cli_stops_after_provider_denies_access(monkeypatch, run_cli):
@@ -331,3 +405,91 @@ def test_benchmark_client_honors_retry_after_and_next_request_interval(monkeypat
     assert usage["failed_attempts"] == 1
     assert usage["input_tokens"] is None
     assert usage["reported_attempts"]["input_tokens"] == 0
+
+
+def test_baseline_parses_same_structured_verdict_as_evidence_modes() -> None:
+    answer = {
+        "verdict": "affected",
+        "answer": f"{CVE} bị ảnh hưởng. Khuyến nghị: nâng cấp lên bản không bị ảnh hưởng.",
+        "asserted_cves": [CVE],
+    }
+    llm = Mock()
+    llm.generate.return_value = json.dumps(answer)
+    row = run.run_baseline({"question": "Question", "question_type": "cve_version_check"}, llm, "groq")
+    assert row["predicted_status"] == "affected"
+    assert row["asserted_cves"] == [CVE]
+    assert row["answer"] == answer["answer"]
+    assert row["raw_answer"] == llm.generate.return_value
+    assert row["status_source"] == "structured_verdict"
+    assert "asserted_cves" in llm.generate.call_args.args[0]
+
+
+def test_evidence_runner_preserves_structured_verdict_and_filter_trace() -> None:
+    response = {
+        "status": "answered", "verdict": "affected", "asserted_cves": [CVE],
+        "answer": f"{CVE} affected. Recommendation: use a version not affected.",
+        "citations": [], "raw_answer": "raw-json", "answer_format": "structured",
+    }
+    row = run._run_with_evidence({"question_type": "cve_version_check"}, "rag", lambda: response)
+    assert row["predicted_status"] == "affected"
+    assert row["raw_answer"] == "raw-json"
+    response.update({
+        "status": "insufficient_evidence", "verdict": "insufficient_evidence", "asserted_cves": [],
+        "model_verdict": "affected", "model_asserted_cves": [CVE],
+        "rejected_cves": [CVE], "rejected_source_ids": ["S99"],
+        "output_error": "unsupported_identifier_or_citation",
+    })
+    filtered = run._run_with_evidence({"question_type": "cve_version_check"}, "rag", lambda: response)
+    assert filtered["model_verdict"] == "affected"
+    assert filtered["model_asserted_cves"] == filtered["rejected_cves"] == [CVE]
+    assert filtered["rejected_source_ids"] == ["S99"]
+    assert filtered["predicted_status"] == "insufficient_evidence"
+
+
+def test_malformed_baseline_envelope_is_an_error_not_a_legacy_success() -> None:
+    llm = Mock()
+    llm.generate.return_value = '{"verdict": "affected", "answer": "broken"'
+    row = run.run_baseline({"question": "Question", "question_type": "cve_version_check"}, llm, "groq")
+    assert row["predicted_status"] == "error"
+    assert row["error"] == row["output_error"] == "invalid_structured_answer"
+    assert row["raw_answer"] == llm.generate.return_value
+
+
+def test_cli_can_require_reviewed_labels_before_making_requests(monkeypatch, run_cli):
+    monkeypatch.setattr(sys, "argv", [*sys.argv, "--require-reviewed"])
+    with pytest.raises(SystemExit) as exc:
+        run.main()
+    assert exc.value.code == 2
+    requests.post.assert_not_called()
+
+
+@pytest.mark.parametrize(("raw_answer", "output_error", "accuracy", "filtered"), [
+    (json.dumps({
+        "verdict": "affected", "answer": f"{CVE} bị ảnh hưởng. Khuyến nghị: nâng cấp lên bản không bị ảnh hưởng [S1].",
+        "asserted_cves": [CVE],
+    }), None, 1, 0),
+    ('{"verdict":"affected",', "invalid_structured_answer", 0, 0),
+    (json.dumps({
+        "verdict": "affected", "answer": "CVE-2099-99999 bị ảnh hưởng [S1].",
+        "asserted_cves": ["CVE-2099-99999"],
+    }), "unsupported_identifier_or_citation", 0, 1),
+])
+def test_real_chatbot_envelope_to_evaluation_scoring(raw_answer, output_error, accuracy, filtered) -> None:
+    llm = Mock()
+    llm.generate.return_value = raw_answer
+    chatbot = run.RAGChatbot(Settings(), retriever=Mock(), llm=llm)
+    item = {
+        "question": f"Does {CVE} affect OpenSSH?", "question_type": "cve_version_check",
+        "expected_cves": [CVE], "expected_status": "affected",
+        "expected_source_urls": ["https://example.test/advisory"],
+    }
+    evidence = lambda _: ("Evidence", [{
+        "source_id": "S1", "vulnerability_id": CVE, "url": "https://example.test/advisory",
+    }])
+    row = run.run_context_baseline(item, chatbot, "groq", "llm_bm25", evidence)
+    assert row["raw_answer"] == raw_answer
+    assert row.get("output_error") == output_error
+    summary = summarize([row], {CVE})
+    assert summary["cve_and_status_accuracy"] == accuracy
+    assert summary["filtered_responses"] == filtered
+    assert summary["output_format_errors"] == (output_error == "invalid_structured_answer")

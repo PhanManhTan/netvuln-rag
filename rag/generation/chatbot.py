@@ -10,8 +10,10 @@ from pathlib import Path
 from typing import Any
 
 from config.settings import Settings, get_settings
+from rag.generation.answers import STRUCTURED_ANSWER_INSTRUCTION, parse_answer
 from rag.generation.client import LLMClient
 from rag.identifiers import find_cve_ids
+from rag.retrieval.models import QueryIntent
 from rag.retrieval.retriever import Retriever
 
 
@@ -59,6 +61,25 @@ class RAGChatbot:
         bundle = self.retriever.search(question, top_k)
         context, sources = self.retriever.format_context(bundle, max_chars=max_context_chars)
         response = self.answer_with_evidence(bundle.query.original, context, sources, provider)
+        if (
+            bundle.query.intent == QueryIntent.VULNERABILITY_CHECK
+            and len(bundle.version_matches) == 1
+            and response.get("answer_format") == "structured"
+            and response.get("status") == "answered"
+            and response.get("verdict") in {"affected", "not_affected"}
+            and response["verdict"] != bundle.version_matches[0].status.value
+        ):
+            response = {
+                **response,
+                "status": "insufficient_evidence",
+                "model_verdict": response["verdict"],
+                "model_asserted_cves": response.get("asserted_cves"),
+                "verdict": "insufficient_evidence",
+                "asserted_cves": [],
+                "answer": "Phản hồi của mô hình đã bị loại vì kết luận trái với bằng chứng phiên bản.",
+                "output_error": "version_verdict_conflict",
+                "citations": [],
+            }
         return {
             **response,
             "parsed_query": asdict(bundle.query),
@@ -77,6 +98,10 @@ class RAGChatbot:
         if not sources:
             return {
                 "status": "insufficient_evidence",
+                "verdict": "insufficient_evidence",
+                "asserted_cves": [],
+                "answer_format": "deterministic",
+                "verdict_source": "no_evidence",
                 "answer": (
                     "Không tìm thấy bằng chứng đủ tin cậy trong dữ liệu đã lập chỉ mục. "
                     "Hệ thống không đưa ra kết luận về lỗ hổng."
@@ -87,8 +112,8 @@ class RAGChatbot:
 
         user_prompt = self.prompts["rag_user_template"].format(question=question, context=context)
         try:
-            answer = self.llm.generate(
-                self.prompts["rag_system_prompt"],
+            raw_answer = self.llm.generate(
+                self.prompts["rag_system_prompt"] + "\n\n" + STRUCTURED_ANSWER_INSTRUCTION,
                 user_prompt,
                 provider,
             )
@@ -100,6 +125,24 @@ class RAGChatbot:
                 "citations": [],
             }
 
+        parsed = parse_answer(raw_answer)
+        trace = {
+            "raw_answer": raw_answer,
+            "answer_format": "structured" if parsed.structured else "legacy",
+            "verdict_source": "structured" if parsed.structured else "legacy_text",
+            "verdict": parsed.verdict,
+            "asserted_cves": list(parsed.asserted_cves) if parsed.asserted_cves is not None else None,
+        }
+        if parsed.error:
+            return {
+                "status": "error",
+                "answer": "Phản hồi của mô hình không đúng định dạng kết quả yêu cầu.",
+                **metadata,
+                **trace,
+                "output_error": parsed.error,
+                "citations": [],
+            }
+        answer = parsed.answer
         cited_ids = {source_id.upper() for source_id in CITATION_PATTERN.findall(answer)}
         allowed_source_ids = {item["source_id"] for item in sources}
         if set(find_cve_ids(answer)) - allowed_ids or cited_ids - allowed_source_ids:
@@ -110,6 +153,14 @@ class RAGChatbot:
                     "tham chiếu nguồn không có trong bằng chứng truy xuất."
                 ),
                 **metadata,
+                **trace,
+                "verdict": "insufficient_evidence",
+                "model_verdict": parsed.verdict,
+                "model_asserted_cves": trace["asserted_cves"],
+                "asserted_cves": [],
+                "output_error": "unsupported_identifier_or_citation",
+                "rejected_cves": sorted(set(find_cve_ids(answer)) - allowed_ids),
+                "rejected_source_ids": sorted(cited_ids - allowed_source_ids),
                 "citations": [],
             }
 
@@ -118,6 +169,7 @@ class RAGChatbot:
             "status": "answered",
             "answer": self._append_sources(answer, citations),
             **metadata,
+            **trace,
             "citations": citations,
         }
 
@@ -141,14 +193,19 @@ def main() -> int:
     parser.add_argument("--text", help="Send one question and exit")
     parser.add_argument("--provider")
     parser.add_argument("--top-k", type=int)
+    parser.add_argument("--stream", action="store_true", help="Show live LLM output before the final checked answer")
     args = parser.parse_args()
 
     settings = get_settings()
     chatbot = RAGChatbot(settings)
+    if args.stream:
+        chatbot.llm.on_chunk = lambda text: print(text, end="", flush=True)
     provider = args.provider or settings.llm_provider
     top_k = args.top_k or settings.top_k
 
     if args.text:
+        if args.stream:
+            print("LLM draft (streaming; final validation follows):", flush=True)
         _print_response(chatbot.ask(args.text, provider=provider, top_k=top_k))
         return 0
 
@@ -186,6 +243,8 @@ def main() -> int:
             print(f"Đã đặt top_k={top_k}")
             continue
 
+        if args.stream:
+            print("LLM draft (streaming; final validation follows):", flush=True)
         _print_response(chatbot.ask(question, provider=provider, top_k=top_k))
 
 

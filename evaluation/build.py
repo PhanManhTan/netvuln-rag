@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 from collections import Counter, defaultdict
@@ -18,7 +19,46 @@ from data_pipeline.nvd import NVDAdapter, cve_description, cve_url, cve_weakness
 from data_pipeline.process import load_processed_manifest, resolve_processed_artifact, select_run
 from data_pipeline.schemas import VersionRule, VulnerabilityRecord
 from data_pipeline.versioning import MatchStatus, VersionMatcher
-from evaluation.dataset import EvaluationQuestion, load_famous_review_list
+from evaluation.dataset import EvaluationQuestion, dataset_quality_report, load_famous_review_list
+
+
+def _select_candidates(values: list[Any], count: int | None, seed: str) -> list[Any]:
+    """Sample deterministically across identifiers instead of always taking oldest IDs."""
+    if count is None or count >= len(values):
+        return values
+    return sorted(values, key=lambda value: hashlib.sha256(f"{seed}|{value}".encode()).digest())[:count]
+
+
+def _question(identifier: str, templates: tuple[str, ...], **values: str) -> str:
+    index = int.from_bytes(hashlib.sha256(identifier.encode()).digest()[:4], "big") % len(templates)
+    return templates[index].format(**values)
+
+
+CHECK_TEMPLATES = (
+    "{product} phiên bản {version} có bị {cve} ảnh hưởng theo NVD không?",
+    "Theo snapshot NVD, {cve} có được ghi nhận cho {product} {version} không?",
+    "Kiểm tra bằng chứng NVD về {cve} đối với {product} version {version}; nêu kết luận và nguồn.",
+)
+INVENTORY_TEMPLATES = (
+    "{product} phiên bản {version} có những CVE nào được NVD ghi nhận?",
+    "Liệt kê đầy đủ CVE của {product} {version} trong snapshot NVD và dẫn nguồn.",
+    "Theo dữ liệu NVD đã thu thập, cần kiểm tra những CVE nào cho {product} version {version}?",
+)
+DETAIL_TEMPLATES = (
+    "NVD mô tả {cve} trên {product} như thế nào? Hãy nêu nguồn.",
+    "Tóm tắt tác động và điều kiện khai thác được NVD mô tả cho {cve} trên {product}, kèm bằng chứng.",
+    "Giải thích nội dung bản ghi NVD {cve} liên quan tới {product}; chỉ nêu mức độ và cách khắc phục nếu nguồn có thông tin.",
+)
+WEAKNESS_LABELS = {
+    "CWE-22": "truy cập đường dẫn ngoài thư mục được phép (path traversal)",
+    "CWE-78": "chèn lệnh hệ điều hành (OS command injection)",
+    "CWE-79": "chèn mã script vào trang web (cross-site scripting)",
+    "CWE-89": "chèn lệnh truy vấn SQL (SQL injection)",
+    "CWE-125": "đọc bộ nhớ ngoài giới hạn (out-of-bounds read)",
+    "CWE-287": "xác thực không đúng (improper authentication)",
+    "CWE-416": "sử dụng bộ nhớ sau khi giải phóng (use-after-free)",
+    "CWE-787": "ghi bộ nhớ ngoài giới hạn (out-of-bounds write)",
+}
 
 
 def _load_records(path: Path) -> list[VulnerabilityRecord]:
@@ -66,6 +106,9 @@ def _row(
         "famous": famous,
         "has_conflict": conflict,
         "notes": notes,
+        "review_status": "draft",
+        "label_basis": "structured_rule_candidate",
+        "label_evidence": [{"source_url": url, "excerpt": notes} for url in urls],
     }
 
 
@@ -95,10 +138,15 @@ def build_product_questions(
         reason = famous_reasons.get(record.vulnerability_id, "")
         rows.append(_row(
             f"{product_id}-check-{index:02d}", product_id, "cve_version_check",
-            f"{display_name} phiên bản {version} có bị {record.vulnerability_id} ảnh hưởng không?",
+            _question(f"{product_id}-check-{index:02d}", CHECK_TEMPLATES, product=display_name, version=version, cve=record.vulnerability_id),
             [record.vulnerability_id], decision.status.value, _urls(record, decision.source_ids),
             bool(reason), decision.query_has_conflict, f"Generated from validated rule. {reason}".strip(),
         ))
+        rows[-1]["label_evidence"] = [
+            {"source_url": source.url, "excerpt": rule.evidence_text or f"Explicit {rule.status} rule covering {version}."}
+            for rule in record.applicability if rule.source_id in decision.source_ids
+            for source in record.sources if source.source_id == rule.source_id
+        ]
 
     versions = list(dict.fromkeys(version for _, version, _ in candidates))
     if not versions:
@@ -128,13 +176,20 @@ def build_product_questions(
         ))
     for index, record in enumerate(selected_records[4:8], 1):
         reason = famous_reasons.get(record.vulnerability_id, "")
-        weakness = record.weaknesses[0] if record.weaknesses else "mô tả kỹ thuật"
+        if not record.weaknesses:
+            raise ValueError(f"{record.vulnerability_id} has no weakness label for a verifiable semantic candidate")
+        weakness = record.weaknesses[0]
+        matching = [candidate for candidate in records if weakness in candidate.weaknesses]
+        cves = sorted({candidate.vulnerability_id for candidate in matching})
+        source_urls = sorted({source.url for candidate in matching for source in candidate.sources})
         rows.append(_row(
             f"{product_id}-semantic-{index:02d}", product_id, "semantic",
-            f"Lỗ hổng nào của {display_name} liên quan đến {weakness}?",
-            [record.vulnerability_id], "affected", sorted({source.url for source in record.sources}),
-            bool(reason), record.has_source_conflict, f"Semantic candidate derived from source metadata. {reason}".strip(),
+            f"Trong snapshot, những CVE nào của {display_name} được gắn nhóm điểm yếu {weakness}?",
+            cves, "affected", source_urls,
+            any(cve in famous_reasons for cve in cves), any(candidate.has_source_conflict for candidate in matching),
+            f"Complete weakness membership from structured source metadata. {reason}".strip(),
         ))
+        rows[-1]["label_basis"] = "structured_weakness_membership"
     return rows
 
 
@@ -202,11 +257,13 @@ def _build_content_questions(
         if description:
             detail = _row(
                 f"{profile.product_id}-detail-{cve.lower()}", profile.product_id, "vulnerability_detail",
-                f"NVD mô tả {cve} trên {profile.display_name} như thế nào? Hãy nêu nguồn.",
+                _question(f"{profile.product_id}-detail-{cve.lower()}", DETAIL_TEMPLATES, product=profile.display_name, cve=cve),
                 [cve], "affected", [cve_url(cve)], cve in famous, False,
                 "Review the summary against the reference answer from the original CVE record.",
             )
             detail["reference_answer"] = description
+            detail["label_basis"] = "nvd_description"
+            detail["label_evidence"] = [{"source_url": cve_url(cve), "excerpt": description}]
             details.append(detail)
         for weakness in cve_weaknesses(record):
             if re.fullmatch(r"CWE-[0-9]+", weakness):
@@ -222,7 +279,27 @@ def _build_content_questions(
         )
         for weakness, cves in sorted(weakness_groups.items())
     ]
-    return details[:details_per_product] + semantic[:semantic_per_product]
+    natural: list[dict[str, Any]] = []
+    for row in semantic:
+        row["label_basis"] = "nvd_weakness_membership"
+        row["label_evidence"] = [
+            {"source_url": cve_url(cve), "excerpt": "; ".join(cve_weaknesses(records[cve]))}
+            for cve in row["expected_cves"]
+        ]
+        weakness = row["id"].split("-semantic-", 1)[1].upper()
+        if weakness in WEAKNESS_LABELS:
+            natural.append({
+                **row,
+                "id": f"{profile.product_id}-semantic-natural-{weakness.lower()}",
+                "question": f"Trong snapshot NVD của {profile.display_name}, CVE nào được gắn nhóm điểm yếu {WEAKNESS_LABELS[weakness]}? Hãy nêu nguồn.",
+                "notes": row["notes"] + f" Natural-language alias for {weakness}; gold remains complete explicit CWE membership, not an inference from description keywords.",
+            })
+    selected_semantic = semantic + natural
+    if semantic_per_product is not None:
+        natural_budget = min(len(natural), max(1, semantic_per_product // 2)) if semantic_per_product else 0
+        selected_natural = _select_candidates(natural, natural_budget, profile.product_id + "-natural")
+        selected_semantic = _select_candidates(semantic, semantic_per_product - len(selected_natural), profile.product_id + "-weaknesses") + selected_natural
+    return _select_candidates(details, details_per_product, profile.product_id + "-details") + selected_semantic
 
 
 def build_raw_questions(
@@ -244,21 +321,25 @@ def build_raw_questions(
     rows: list[dict[str, Any]] = []
     for index, (target, cves) in enumerate(snapshots):
         identifier = f"{profile.product_id}-{target.version}"
-        subject = f"{profile.display_name} phiên bản {target.version}"
-        notes = f"NVD isVulnerable query for {target.cpe}. Review against original CVE records."
+        notes = (
+            f"NVD isVulnerable query for {target.cpe}. Review against original CVE records. "
+            "Labels express saved query membership, not unconditional impact on every deployment."
+        )
         urls = [cve_url(cve) for cve in cves]
         rows.append(_row(
             f"{identifier}-inventory", profile.product_id, "version_inventory",
-            f"{subject} có những CVE nào được NVD ghi nhận?",
+            _question(f"{identifier}-inventory", INVENTORY_TEMPLATES, product=profile.display_name, version=target.version),
             cves, "affected" if cves else "insufficient_evidence", urls,
             any(cve in famous for cve in cves), False, notes,
         ))
-        for cve, url in zip(cves[:checks_per_version], urls[:checks_per_version], strict=True):
+        rows[-1]["label_basis"] = "nvd_exact_cpe_query"
+        for cve in _select_candidates(cves, checks_per_version, identifier):
             rows.append(_row(
                 f"{identifier}-{cve.lower()}", profile.product_id, "cve_version_check",
-                f"{subject} có bị {cve} ảnh hưởng theo NVD không?",
-                [cve], "affected", [url], cve in famous, False, notes,
+                _question(f"{identifier}-{cve.lower()}", CHECK_TEMPLATES, product=profile.display_name, version=target.version, cve=cve),
+                [cve], "affected", [cve_url(cve)], cve in famous, False, notes,
             ))
+            rows[-1]["label_basis"] = "nvd_exact_cpe_query"
         known = set(cves)
         neighbors = snapshots[max(0, index - 1):index] + snapshots[index + 1:index + 2]
         for neighbor, neighbor_cves in neighbors:
@@ -266,10 +347,15 @@ def build_raw_questions(
             if missing:
                 rows.append(_row(
                     f"{identifier}-{missing.lower()}", profile.product_id, "cve_version_check",
-                    f"{subject} có bị {missing} ảnh hưởng theo NVD không?",
+                    _question(f"{identifier}-{missing.lower()}", CHECK_TEMPLATES, product=profile.display_name, version=target.version, cve=missing),
                     [], "insufficient_evidence", [], missing in famous, False,
                     f"{notes} CVE present for {neighbor.version}; absent from this complete query.",
                 ))
+                rows[-1]["label_basis"] = "absence_from_complete_nvd_query"
+                rows[-1]["label_evidence"] = [{
+                    "source_url": cve_url(missing),
+                    "excerpt": f"Saved complete query for {target.cpe} did not return {missing}; it was returned for {neighbor.cpe}. This supports abstention only, not not_affected.",
+                }]
                 break
     rows.extend(_build_content_questions(profile, raw_records, famous, details_per_product, semantic_per_product))
     return [{**row, "raw_run_id": run_dir.name} for row in rows]
@@ -393,6 +479,8 @@ def main() -> int:
     print(f"Wrote {len(rows)} review-draft questions to {args.output}")
     for question_type, count in sorted(Counter(question.question_type for question in questions).items()):
         print(f"  {question_type}: {count}")
+    for warning in dataset_quality_report([question.model_dump(mode="json") for question in questions])["warnings"]:
+        print(f"  Review warning: {warning}")
     return 0
 
 

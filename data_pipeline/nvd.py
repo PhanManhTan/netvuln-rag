@@ -288,7 +288,10 @@ class NVDAdapter:
                     status="affected",
                     exact_versions=(target.version,),
                     literal_exact=True,
-                    evidence_text=f"NVD CVE API returned this CVE for {target.cpe} with isVulnerable.",
+                    evidence_text=(
+                        f"NVD CVE API returned this CVE for {target.cpe} with isVulnerable. "
+                        "This is snapshot query membership, not proof that every deployment is affected."
+                    ),
                 ))
         return {
             cve: self._normalize(raw, path, rules[cve], retrieved_at=retrieved_at)
@@ -325,25 +328,55 @@ class NVDAdapter:
         return None
 
     @classmethod
-    def _walk_cpe_matches(cls, value: Any) -> Iterable[dict[str, Any]]:
+    def _walk_cpe_matches(
+        cls, value: Any, conditions: tuple[str, ...] = (),
+    ) -> Iterable[tuple[dict[str, Any], tuple[str, ...]]]:
+        """Keep logical restrictions attached to each match instead of flattening them."""
         if isinstance(value, dict):
+            restrictions = list(conditions)
+            operator = str(value.get("operator", "OR")).upper()
+            if operator == "AND":
+                restrictions.append("NVD AND configuration requires additional conditions not modeled by version rules.")
+            elif operator != "OR":
+                restrictions.append(f"NVD configuration operator {operator!r} is unsupported.")
+            if value.get("negate"):
+                restrictions.append("NVD negated configuration is not modeled by version rules.")
             for match in value.get("cpeMatch", []):
                 if isinstance(match, dict):
-                    yield match
-            for child in value.values():
-                yield from cls._walk_cpe_matches(child)
+                    yield match, tuple(restrictions)
+            for key in ("nodes", "children"):
+                yield from cls._walk_cpe_matches(value.get(key, []), tuple(restrictions))
         elif isinstance(value, list):
             for child in value:
-                yield from cls._walk_cpe_matches(child)
+                yield from cls._walk_cpe_matches(child, conditions)
+
+    def _cpe_limitations(self, criteria: str) -> tuple[str, ...]:
+        """Only reduce CPEs whose non-version constraints are covered by the profile."""
+        parts = criteria.split(":")
+        profile_parts = self.profile.cpe.split(":")
+        if len(parts) != 13 or parts[:2] != ["cpe", "2.3"] or "\\" in criteria or len(profile_parts) != 13:
+            return ("Malformed or escaped CPE requires source review; no unconditional version rule was created.",)
+        notes: list[str] = []
+        for index, name in ((2, "part"), (6, "update"), (7, "edition"), (8, "language"), (9, "software edition"), (10, "target software"), (11, "target hardware"), (12, "other")):
+            constraint = parts[index].casefold()
+            if constraint != "*" and constraint != profile_parts[index].casefold():
+                notes.append(f"NVD CPE {name}={parts[index]!r} is outside the profile's modeled conditions.")
+        if any("*" in part or "?" in part for part in parts[5:] if part != "*"):
+            notes.append("NVD CPE component patterns are not modeled by numeric version rules.")
+        return tuple(notes)
 
     def _version_rules(self, record: dict[str, Any]) -> list[VersionRule]:
+        return self._configuration_rules(record)[0]
+
+    def _configuration_rules(self, record: dict[str, Any]) -> tuple[list[VersionRule], tuple[str, ...]]:
         rules: list[VersionRule] = []
+        limitations: list[str] = []
         seen: set[str] = set()
-        for match in self._walk_cpe_matches(record.get("configurations", [])):
+        for match, conditions in self._walk_cpe_matches(record.get("configurations", [])):
             criteria = str(match.get("criteria", ""))
             parts = criteria.split(":")
             is_target = (
-                len(parts) >= 6
+                len(parts) >= 5
                 and parts[3].lower() == self.profile.vendor
                 and parts[4].lower() == self.profile.product
             )
@@ -352,10 +385,20 @@ class NVDAdapter:
             # In NVD logical configurations, vulnerable=false commonly denotes a
             # required environment component; it is not proof that the target
             # product/version is safe.
-            if not bool(match.get("vulnerable", False)):
+            if match.get("vulnerable") is not True:
+                if type(match.get("vulnerable", False)) is not bool:
+                    limitations.append("NVD vulnerable flag is not a boolean; source review is required.")
+                continue
+
+            unsupported = (*conditions, *self._cpe_limitations(criteria))
+            if unsupported:
+                limitations.extend(unsupported)
                 continue
 
             exact = parts[5]
+            if exact in {"", "-"}:
+                limitations.append("NVD CPE version is empty or not applicable ('-'), not all versions; no unconditional version rule was created.")
+                continue
             exact_versions = () if exact in {"", "*", "-"} else (exact,)
             boundary_values = [
                 str(match.get(field))
@@ -391,7 +434,7 @@ class NVDAdapter:
             if fingerprint not in seen:
                 rules.append(rule)
                 seen.add(fingerprint)
-        return rules
+        return rules, tuple(dict.fromkeys(limitations))
 
     def _normalize(
         self,
@@ -403,9 +446,12 @@ class NVDAdapter:
     ) -> VulnerabilityRecord:
         vulnerability_id = str(record.get("id", "")).upper()
         source_id = f"nvd:{vulnerability_id}"
+        configuration_rules, limitations = self._configuration_rules(record)
+        if version_rules is not None:
+            limitations = (*limitations, "Exact-CPE applicability reflects membership in the saved NVD query. Platform, configuration and deployment conditions still require source review.")
         rules = tuple(
             rule.model_copy(update={"source_id": source_id})
-            for rule in (self._version_rules(record) if version_rules is None else version_rules)
+            for rule in (configuration_rules if version_rules is None else version_rules)
         )
         source = SourceReference(
             source_id=source_id,
@@ -434,4 +480,5 @@ class NVDAdapter:
             sources=(source,),
             applicability=rules,
             effective_rules=rules,
+            applicability_notes=limitations,
         )

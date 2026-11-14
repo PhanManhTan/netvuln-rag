@@ -268,7 +268,10 @@ class VersionMatcher:
         vendor = [rule for rule in matches if rule.authority == "vendor"]
         candidates = vendor or [rule for rule in matches if rule.authority == "nvd"]
         if not candidates:
-            return VersionDecision(record.vulnerability_id, version_text, MatchStatus.UNKNOWN, "Không có source rule bao phủ phiên bản này.", record.product_id)
+            reason = "Không có source rule bao phủ phiên bản này."
+            if record.applicability_notes:
+                reason += " " + " ".join(record.applicability_notes)
+            return VersionDecision(record.vulnerability_id, version_text, MatchStatus.UNKNOWN, reason, record.product_id)
 
         best_priority = min(rule.priority for rule in candidates)
         winners = [rule for rule in candidates if rule.priority == best_priority]

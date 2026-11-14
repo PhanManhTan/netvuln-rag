@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 from urllib.parse import quote
 
 import requests
 
 from config.settings import Settings, get_settings
+from rag.generation.streaming import consume_stream
 
 
 class LLMClient:
@@ -15,8 +17,9 @@ class LLMClient:
 
     supported_providers = ("gemini", "groq", "ollama", "openai")
 
-    def __init__(self, settings: Settings | None = None) -> None:
+    def __init__(self, settings: Settings | None = None, *, on_chunk: Callable[[str], None] | None = None) -> None:
         self.settings = settings or get_settings()
+        self.on_chunk = on_chunk
 
     def generate(
         self,
@@ -54,6 +57,27 @@ class LLMClient:
     def _record_response(self, provider: str, payload: dict[str, Any]) -> None:
         """Allow benchmark callers to observe usage from a successful HTTP response."""
 
+    def _record_chunk(self, text: str) -> None:
+        if self.on_chunk is not None:
+            self.on_chunk(text)
+
+    def _request_json(self, provider: str, url: str, **kwargs: Any) -> dict[str, Any]:
+        streaming = self.on_chunk is not None
+        if streaming:
+            kwargs["stream"] = True
+            if provider == "gemini":
+                url = url.replace(":generateContent", ":streamGenerateContent?alt=sse")
+            else:
+                kwargs["json"]["stream"] = True
+        response = requests.post(url, **kwargs)
+        try:
+            response.raise_for_status()
+            if streaming:
+                return consume_stream(provider, response, self._record_response, self._record_chunk)
+            return response.json()
+        finally:
+            response.close()
+
     def _generate_gemini(self, system_prompt: str, user_prompt: str) -> str:
         if not self.settings.gemini_api_key:
             raise ValueError("GEMINI_API_KEY chưa được cấu hình.")
@@ -66,15 +90,14 @@ class LLMClient:
         }
         if system_prompt:
             payload["systemInstruction"] = {"parts": [{"text": system_prompt}]}
-        response = requests.post(
+        result = self._request_json(
+            "gemini",
             f"https://generativelanguage.googleapis.com/v1beta/models/{quote(model, safe='')}:generateContent",
             headers={"x-goog-api-key": self.settings.gemini_api_key},
             json=payload,
             timeout=self.settings.llm_timeout,
             allow_redirects=False,
         )
-        response.raise_for_status()
-        result = response.json()
         self._record_response("gemini", result)
         candidate = next(iter(result.get("candidates") or []), {})
         parts = (candidate.get("content") or {}).get("parts", [])
@@ -102,15 +125,14 @@ class LLMClient:
         if model in {"openai/gpt-oss-20b", "openai/gpt-oss-120b"}:
             payload["reasoning_effort"] = "low"
             payload["reasoning_format"] = "hidden"
-        response = requests.post(
+        result = self._request_json(
+            "groq",
             "https://api.groq.com/openai/v1/chat/completions",
             headers={"Authorization": f"Bearer {self.settings.groq_api_key}"},
             json=payload,
             timeout=self.settings.llm_timeout,
             allow_redirects=False,
         )
-        response.raise_for_status()
-        result = response.json()
         self._record_response("groq", result)
         choice = next(iter(result.get("choices") or []), {})
         text = (choice.get("message", {}).get("content") or "").strip()
@@ -119,7 +141,8 @@ class LLMClient:
         return text
 
     def _generate_ollama(self, system_prompt: str, user_prompt: str) -> str:
-        response = requests.post(
+        result = self._request_json(
+            "ollama",
             f"{self.settings.ollama_url.rstrip('/')}/api/chat",
             json={
                 "model": self.settings.ollama_model,
@@ -132,8 +155,6 @@ class LLMClient:
             },
             timeout=self.settings.llm_timeout,
         )
-        response.raise_for_status()
-        result = response.json()
         self._record_response("ollama", result)
         content = result.get("message", {}).get("content", "").strip()
         if not content:
@@ -143,7 +164,8 @@ class LLMClient:
     def _generate_openai(self, system_prompt: str, user_prompt: str) -> str:
         if not self.settings.openai_api_key:
             raise ValueError("OPENAI_API_KEY chưa được cấu hình.")
-        response = requests.post(
+        result = self._request_json(
+            "openai",
             "https://api.openai.com/v1/responses",
             headers={
                 "Authorization": f"Bearer {self.settings.openai_api_key}",
@@ -156,8 +178,6 @@ class LLMClient:
             },
             timeout=self.settings.llm_timeout,
         )
-        response.raise_for_status()
-        result = response.json()
         self._record_response("openai", result)
         return self._read_openai_text(result)
 

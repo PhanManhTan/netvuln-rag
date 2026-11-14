@@ -96,6 +96,7 @@ class VulnerabilityRecord(BaseModel):
     sources: tuple[SourceReference, ...]
     applicability: tuple[VersionRule, ...] = ()
     effective_rules: tuple[VersionRule, ...] = ()
+    applicability_notes: tuple[str, ...] = ()
     has_source_conflict: bool = False
     conflict_intervals: tuple[ConflictInterval, ...] = ()
 
